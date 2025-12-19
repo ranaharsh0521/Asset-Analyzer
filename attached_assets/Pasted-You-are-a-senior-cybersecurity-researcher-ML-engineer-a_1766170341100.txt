@@ -1,0 +1,169 @@
+You are a senior cybersecurity researcher, ML engineer, and IEEE paper author.
+
+Your task is to design and implement a COMPLETE, END-TO-END, REPRODUCIBLE research project titled:
+
+"AI-Driven Cyber-Attack Prediction Using Graph Neural Networks"
+
+========================
+PROBLEM STATEMENT
+========================
+Cyber attacks are increasingly multi-step, stealthy, and temporally distributed. Traditional intrusion detection systems (IDS) analyze isolated events and fail to detect coordinated attack chains early. The objective is to predict future malicious actions before they occur by modeling system/network events as temporal graphs and applying Graph Neural Networks (GNNs).
+
+========================
+STRICT REQUIREMENTS (NON-NEGOTIABLE)
+========================
+1. This must be a REAL, runnable system — not theory.
+2. No use of built-in sqrt-like shortcuts, black-box APIs, or cloud-only services.
+3. Everything must run locally.
+4. Code must be clean, modular, and executable.
+
+========================
+DATASET
+========================
+Use at least ONE real dataset:
+- CICIDS2017 OR
+- UNSW-NB15 OR
+- DARPA Intrusion Detection Dataset
+
+If preprocessing is heavy, provide a lightweight sampled version for demonstration.
+
+========================
+GRAPH CONSTRUCTION (MANDATORY)
+========================
+Convert raw logs into a temporal graph.
+
+Nodes:
+- IP addresses
+- Hosts
+- Users
+- Processes
+- Ports
+
+Edges:
+- Network communication
+- Authentication events
+- File/process access
+
+Edge attributes:
+- Timestamp
+- Protocol
+- Event type
+- Packet count / bytes (if available)
+
+Graph Type:
+- Temporal graph (snapshots or continuous-time)
+- Justify choice clearly
+
+========================
+PREDICTION TASK (CHOOSE ONE AND JUSTIFY)
+========================
+- Node-level prediction: Will this node become malicious in next Δt?
+- Edge-level prediction: Will this interaction be malicious?
+- Graph-level classification: Is this attack chain malicious?
+
+Output must be a PROBABILITY score for early attack prediction.
+
+========================
+MODEL REQUIREMENTS
+========================
+Implement at least ONE of:
+- GCN
+- GraphSAGE
+- GAT
+- Temporal GNN (TGN preferred)
+
+Libraries:
+- PyTorch
+- PyTorch Geometric
+- NetworkX
+
+Include:
+- Model architecture diagram (ASCII or explanation)
+- Loss function
+- Optimizer
+- Training loop
+- Validation logic
+
+========================
+TEMPORAL MODELING (MANDATORY)
+========================
+Explicitly encode time using:
+- Time windows OR
+- Temporal embeddings OR
+- Continuous-time message passing (for TGN)
+
+If temporal modeling is missing → project is invalid.
+
+========================
+BASELINE COMPARISON (MANDATORY)
+========================
+Implement at least ONE baseline:
+- Random Forest
+- XGBoost
+- Logistic Regression
+- Rule-based IDS logic
+
+Compare results numerically.
+
+========================
+EVALUATION METRICS
+========================
+Report:
+- Precision
+- Recall
+- F1-score
+- ROC-AUC
+- Early Detection Rate
+- Confusion Matrix
+
+Explain WHY accuracy alone is insufficient.
+
+========================
+VISUALIZATION (MANDATORY)
+========================
+Provide:
+- Attack graph visualization
+- Malicious path highlighting
+- ROC curve
+- Confusion matrix plot
+
+========================
+SYSTEM ARCHITECTURE
+========================
+Backend:
+- Python
+- FastAPI for inference API
+
+Optional:
+- Neo4j for graph storage (optional, justify if used)
+
+Provide:
+- REST API endpoint for prediction
+- Example API request/response
+
+========================
+DELIVERABLES
+========================
+1. Project folder structure
+2. Fully runnable code
+3. Dataset preprocessing scripts
+4. Model training script
+5. Inference script
+6. Evaluation script
+7. Visualization script
+8. README with setup instructions
+9. Experimental results table
+10. Limitations
+11. Future work
+12. IEEE-style abstract and conclusion
+
+========================
+ABSOLUTE RULES
+========================
+- NO high-level theory dumps
+- NO placeholders like “assume data”
+- NO missing code sections
+- NO fake metrics
+- Everything must be concrete and executable
+
+Start from dataset loading and finish with model evaluation and API deployment.
