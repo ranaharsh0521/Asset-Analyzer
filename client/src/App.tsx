@@ -8,6 +8,10 @@ import Dashboard from "@/pages/Dashboard";
 import Experiment from "@/pages/Experiment";
 import Evaluation from "@/pages/Evaluation";
 import ProjectStructure from "@/pages/ProjectStructure";
+import AttackIntelligence from "@/pages/AttackIntelligence";
+import Explainability from "@/pages/Explainability";
+import RiskAssessment from "@/pages/RiskAssessment";
+import AdvancedEvaluation from "@/pages/AdvancedEvaluation";
 
 function Router() {
   return (
@@ -15,6 +19,10 @@ function Router() {
       <Route path="/" component={Dashboard} />
       <Route path="/experiment" component={Experiment} />
       <Route path="/evaluation" component={Evaluation} />
+      <Route path="/attack-intelligence" component={AttackIntelligence} />
+      <Route path="/explainability" component={Explainability} />
+      <Route path="/risk-assessment" component={RiskAssessment} />
+      <Route path="/advanced-eval" component={AdvancedEvaluation} />
       <Route path="/files" component={ProjectStructure} />
       <Route component={NotFound} />
     </Switch>

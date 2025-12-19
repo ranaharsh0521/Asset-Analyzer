@@ -7,7 +7,11 @@ import {
   Activity,
   Shield,
   Menu,
-  X
+  X,
+  Zap,
+  Brain,
+  AlertTriangle,
+  BarChart3
 } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
@@ -19,7 +23,11 @@ export function Sidebar() {
   const links = [
     { href: "/", label: "Dashboard", icon: LayoutDashboard },
     { href: "/experiment", label: "Experiment Lab", icon: Network },
+    { href: "/attack-intelligence", label: "Attack Stages", icon: Zap },
+    { href: "/explainability", label: "Explainability", icon: Brain },
+    { href: "/risk-assessment", label: "Risk Assessment", icon: AlertTriangle },
     { href: "/evaluation", label: "Evaluation", icon: Activity },
+    { href: "/advanced-eval", label: "Advanced Metrics", icon: BarChart3 },
     { href: "/files", label: "Project Files", icon: FileText },
   ];
 
@@ -45,7 +53,7 @@ export function Sidebar() {
         </button>
       </div>
 
-      <nav className="flex-1 p-2 space-y-1">
+      <nav className="flex-1 p-2 space-y-1 overflow-auto">
         {links.map((link) => {
           const Icon = link.icon;
           const isActive = location === link.href;
@@ -53,7 +61,7 @@ export function Sidebar() {
           return (
             <Link key={link.href} href={link.href}>
               <div className={cn(
-                "flex items-center gap-3 px-3 py-2 rounded-md cursor-pointer transition-colors group relative overflow-hidden",
+                "flex items-center gap-3 px-3 py-2 rounded-md cursor-pointer transition-colors group relative overflow-hidden text-sm",
                 isActive 
                   ? "bg-primary/10 text-primary border border-primary/20" 
                   : "text-muted-foreground hover:bg-muted hover:text-foreground"
@@ -61,8 +69,8 @@ export function Sidebar() {
                 {isActive && (
                   <div className="absolute left-0 top-0 bottom-0 w-1 bg-primary shadow-[0_0_10px_var(--color-primary)]" />
                 )}
-                <Icon size={20} className={cn(isActive && "text-primary drop-shadow-[0_0_5px_rgba(0,255,255,0.5)]")} />
-                {!collapsed && <span className="font-medium">{link.label}</span>}
+                <Icon size={18} className={cn(isActive && "text-primary drop-shadow-[0_0_5px_rgba(0,255,255,0.5)]")} />
+                {!collapsed && <span className="font-medium truncate">{link.label}</span>}
               </div>
             </Link>
           );
