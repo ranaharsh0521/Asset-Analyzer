@@ -3,7 +3,7 @@
 This research prototype demonstrates a Temporal Graph Neural Network (TGNN) approach to intrusion detection and attack stage prediction.
 
 ## 🚀 Quick Start (Local Host)
-
+  
 Follow these steps to run the project on your local machine:
 
 ### 1. Prerequisites
