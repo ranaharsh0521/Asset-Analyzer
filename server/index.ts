@@ -66,8 +66,12 @@ app.use((req, res, next) => {
     const status = err.status || err.statusCode || 500;
     const message = err.message || "Internal Server Error";
 
-    res.status(status).json({ message });
-    throw err;
+    // Bug fix: do NOT re-throw after sending the response — it causes an
+    // unhandled rejection that can crash the Express process.
+    if (!res.headersSent) {
+      res.status(status).json({ message });
+    }
+    console.error(`[error] ${status}: ${message}`);
   });
 
   // importantly only setup vite in development and after
@@ -88,7 +92,7 @@ app.use((req, res, next) => {
   httpServer.listen(
     {
       port,
-      host: "127.0.0.1",
+      host: "0.0.0.0",
     },
     () => {
       log(`serving on port ${port}`);

@@ -7,21 +7,53 @@ import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Slider } from "@/components/ui/slider";
-import { Play, RotateCcw, Save, Settings, Database, BrainCircuit, Activity } from "lucide-react";
-import { TrainingTerminal } from "@/components/viz/TrainingTerminal";
+import { Play, RotateCcw, Save, Database, BrainCircuit, Activity } from "lucide-react";
+import { TrainingTerminal, type LogEntry } from "@/components/viz/TrainingTerminal";
 import { MOCK_LOGS } from "@/lib/mockData";
 import { motion } from "framer-motion";
+import { useToast } from "@/hooks/use-toast";
+
+// Map slider 0-100 to learning-rate 0.0001 – 0.01 (log scale)
+function sliderToLR(val: number): string {
+  return (0.0001 * Math.pow(100, val / 100)).toFixed(4);
+}
+// Map slider 0-100 to hidden dim 32 – 512
+function sliderToHiddenDim(val: number): number {
+  const dims = [32, 64, 128, 256, 512];
+  return dims[Math.round((val / 100) * (dims.length - 1))];
+}
 
 export default function Experiment() {
+  const { toast } = useToast();
   const [isTraining, setIsTraining] = useState(false);
   const [progress, setProgress] = useState(0);
-  const [logs, setLogs] = useState<string[]>([]);
-  
+  // Bug fix: LogEntry carries a timestamp captured when the line was pushed
+  const [logs, setLogs] = useState<LogEntry[]>([]);
+  // Bug fix: slider display values were hardcoded; now stored in state
+  const [lrSlider, setLrSlider] = useState(30);
+  const [hiddenSlider, setHiddenSlider] = useState(60);
+
+  const handleReset = () => {
+    setLrSlider(30);
+    setHiddenSlider(60);
+    setLogs([]);
+    setProgress(0);
+    setIsTraining(false);
+    toast({ title: "Configuration Reset", description: "All hyperparameters restored to defaults." });
+  };
+
+  const handleSaveConfig = () => {
+    toast({
+      title: "Configuration Saved",
+      description: `LR: ${sliderToLR(lrSlider)} | Hidden Dim: ${sliderToHiddenDim(hiddenSlider)}`,
+    });
+  };
+
   const startTraining = () => {
     setIsTraining(true);
     setLogs([]);
     setProgress(0);
-    
+
     let currentLogIndex = 0;
     const interval = setInterval(() => {
       if (currentLogIndex >= MOCK_LOGS.length) {
@@ -29,8 +61,11 @@ export default function Experiment() {
         setIsTraining(false);
         return;
       }
-      
-      setLogs(prev => [...prev, MOCK_LOGS[currentLogIndex]]);
+
+      setLogs(prev => [
+        ...prev,
+        { text: MOCK_LOGS[currentLogIndex], time: new Date().toLocaleTimeString() },
+      ]);
       setProgress(prev => Math.min(prev + (100 / MOCK_LOGS.length), 100));
       currentLogIndex++;
     }, 800);
@@ -46,10 +81,10 @@ export default function Experiment() {
             <p className="text-muted-foreground font-mono text-sm">Configure Model Hyperparameters & Train GNN</p>
           </div>
           <div className="flex gap-2">
-            <Button variant="outline" className="gap-2"><RotateCcw size={16} /> Reset</Button>
-            <Button variant="outline" className="gap-2"><Save size={16} /> Save Config</Button>
-            <Button 
-              onClick={startTraining} 
+            <Button variant="outline" className="gap-2" onClick={handleReset}><RotateCcw size={16} /> Reset</Button>
+            <Button variant="outline" className="gap-2" onClick={handleSaveConfig}><Save size={16} /> Save Config</Button>
+            <Button
+              onClick={startTraining}
               disabled={isTraining}
               className="bg-primary text-primary-foreground hover:bg-primary/90 gap-2 min-w-[140px]"
             >
@@ -62,11 +97,11 @@ export default function Experiment() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Configuration Panel */}
           <div className="lg:col-span-1 space-y-6">
-            
+
             {/* Dataset Config */}
             <Card className="bg-card/40 backdrop-blur-sm border-border/50">
               <CardHeader>
-                <CardTitle className="flex items-center gap-2"><Database size={18} className="text-primary"/> Dataset</CardTitle>
+                <CardTitle className="flex items-center gap-2"><Database size={18} className="text-primary" /> Dataset</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="space-y-2">
@@ -99,7 +134,7 @@ export default function Experiment() {
             {/* Model Architecture */}
             <Card className="bg-card/40 backdrop-blur-sm border-border/50">
               <CardHeader>
-                <CardTitle className="flex items-center gap-2"><BrainCircuit size={18} className="text-primary"/> Model Architecture</CardTitle>
+                <CardTitle className="flex items-center gap-2"><BrainCircuit size={18} className="text-primary" /> Model Architecture</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="space-y-2">
@@ -119,16 +154,26 @@ export default function Experiment() {
                   <div className="space-y-2">
                     <div className="flex justify-between text-xs">
                       <Label>Learning Rate</Label>
-                      <span className="text-muted-foreground font-mono">0.001</span>
+                      <span className="text-muted-foreground font-mono">{sliderToLR(lrSlider)}</span>
                     </div>
-                    <Slider defaultValue={[30]} max={100} step={1} />
+                    <Slider
+                      value={[lrSlider]}
+                      onValueChange={([v]) => setLrSlider(v)}
+                      max={100}
+                      step={1}
+                    />
                   </div>
                   <div className="space-y-2">
                     <div className="flex justify-between text-xs">
                       <Label>Hidden Dimension</Label>
-                      <span className="text-muted-foreground font-mono">128</span>
+                      <span className="text-muted-foreground font-mono">{sliderToHiddenDim(hiddenSlider)}</span>
                     </div>
-                    <Slider defaultValue={[60]} max={100} step={1} />
+                    <Slider
+                      value={[hiddenSlider]}
+                      onValueChange={([v]) => setHiddenSlider(v)}
+                      max={100}
+                      step={1}
+                    />
                   </div>
                 </div>
 
@@ -160,39 +205,39 @@ export default function Experiment() {
           {/* Terminal & Visualization */}
           <div className="lg:col-span-2 flex flex-col gap-6">
             <Card className="flex-1 bg-black/50 border-border/50 flex flex-col overflow-hidden">
-               <div className="p-3 border-b border-white/10 flex justify-between items-center bg-card/20">
-                 <span className="font-mono text-sm text-muted-foreground">Console Output</span>
-                 {isTraining && <span className="text-xs text-primary animate-pulse">TRAINING IN PROGRESS...</span>}
-               </div>
-               <div className="flex-1 p-0">
-                  <TrainingTerminal logs={logs} className="h-full border-none rounded-none" />
-               </div>
+              <div className="p-3 border-b border-white/10 flex justify-between items-center bg-card/20">
+                <span className="font-mono text-sm text-muted-foreground">Console Output</span>
+                {isTraining && <span className="text-xs text-primary animate-pulse">TRAINING IN PROGRESS...</span>}
+              </div>
+              <div className="flex-1 p-0">
+                <TrainingTerminal logs={logs} className="h-full border-none rounded-none" />
+              </div>
             </Card>
 
             {/* Simulated Live Loss Chart (Placeholder) */}
             <div className="h-48 rounded-lg border border-border/50 bg-card/30 p-4 relative overflow-hidden flex items-center justify-center">
-               {!isTraining && logs.length === 0 ? (
-                 <div className="text-muted-foreground text-sm flex flex-col items-center gap-2">
-                   <Activity className="opacity-20" size={48} />
-                   Start training to view live metrics
-                 </div>
-               ) : (
-                 <div className="w-full h-full flex items-end gap-1 px-4 pb-4">
-                   {/* Simulated Bar Chart */}
-                   {Array.from({length: 40}).map((_, i) => (
-                      <motion.div 
-                        key={i}
-                        initial={{ height: 0 }}
-                        animate={{ height: `${Math.random() * 80 + 10}%` }}
-                        transition={{ duration: 0.5, delay: i * 0.05 }}
-                        className="flex-1 bg-primary/20 hover:bg-primary/50 rounded-t-sm"
-                      />
-                   ))}
-                   <div className="absolute top-2 right-4 font-mono text-xs text-primary">
-                     Loss: {(0.9 - (progress/100)*0.7).toFixed(4)}
-                   </div>
-                 </div>
-               )}
+              {!isTraining && logs.length === 0 ? (
+                <div className="text-muted-foreground text-sm flex flex-col items-center gap-2">
+                  <Activity className="opacity-20" size={48} />
+                  Start training to view live metrics
+                </div>
+              ) : (
+                <div className="w-full h-full flex items-end gap-1 px-4 pb-4">
+                  {/* Simulated Bar Chart */}
+                  {Array.from({ length: 40 }).map((_, i) => (
+                    <motion.div
+                      key={i}
+                      initial={{ height: 0 }}
+                      animate={{ height: `${Math.random() * 80 + 10}%` }}
+                      transition={{ duration: 0.5, delay: i * 0.05 }}
+                      className="flex-1 bg-primary/20 hover:bg-primary/50 rounded-t-sm"
+                    />
+                  ))}
+                  <div className="absolute top-2 right-4 font-mono text-xs text-primary">
+                    Loss: {(0.9 - (progress / 100) * 0.7).toFixed(4)}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>

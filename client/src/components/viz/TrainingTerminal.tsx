@@ -1,9 +1,17 @@
-import React, { useEffect, useRef } from 'react';
+import { useEffect, useRef } from 'react';
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
 
+// Bug fix: each log entry now carries the timestamp of when it was received
+// rather than calling new Date() at render time (which gives every line
+// the same "current" time).
+export interface LogEntry {
+  text: string;
+  time: string;
+}
+
 interface TerminalProps {
-  logs: string[];
+  logs: LogEntry[];
   className?: string;
 }
 
@@ -24,17 +32,17 @@ export function TrainingTerminal({ logs, className }: TerminalProps) {
       </div>
       <ScrollArea className="flex-1 pr-4">
         <div className="space-y-1">
-          {logs.map((log, i) => (
+          {logs.map((entry, i) => (
             <div key={i} className={cn(
               "break-all",
-              log.includes("[SUCCESS]") ? "text-green-400" :
-              log.includes("[ERROR]") ? "text-red-400" :
-              log.includes("[INFO]") ? "text-blue-300" :
-              log.includes("Epoch") ? "text-yellow-100" :
-              "text-muted-foreground"
+              entry.text.includes("[SUCCESS]") ? "text-green-400" :
+                entry.text.includes("[ERROR]") ? "text-red-400" :
+                  entry.text.includes("[INFO]") ? "text-blue-300" :
+                    entry.text.includes("Epoch") ? "text-yellow-100" :
+                      "text-muted-foreground"
             )}>
-              <span className="opacity-50 mr-2">{new Date().toLocaleTimeString()}</span>
-              {log}
+              <span className="opacity-50 mr-2">{entry.time}</span>
+              {entry.text}
             </div>
           ))}
           <div ref={endRef} />

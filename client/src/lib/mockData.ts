@@ -1,22 +1,3 @@
-import { clsx, type ClassValue } from "clsx";
-import { twMerge } from "tailwind-merge";
-
-export function cn(...inputs: ClassValue[]) {
-  return twMerge(clsx(inputs));
-}
-
-export const generateMockGraphData = (count = 20) => {
-  return Array.from({ length: count }, (_, i) => ({
-    id: `node-${i}`,
-    x: Math.random() * 800,
-    y: Math.random() * 600,
-    type: i % 5 === 0 ? 'malicious' : 'benign',
-    connections: Array.from({ length: Math.floor(Math.random() * 3) + 1 }, () => 
-      `node-${Math.floor(Math.random() * count)}`
-    )
-  }));
-};
-
 export const MOCK_LOGS = [
   "[INFO] Initializing GNN-IDS System...",
   "[INFO] Loading dataset: CICIDS2017 (Sampled)",
