@@ -1,0 +1,198 @@
+You are a senior cybersecurity researcher, SOC analyst, ML engineer, and IEEE reviewer.
+
+Your task is to design and implement a COMPLETE, END-TO-END, REAL-WORLD, REPRODUCIBLE research system titled:
+
+"AI-Driven Cyber-Attack Prediction Using Temporal Graph Neural Networks for Early Threat Detection"
+
+====================================================
+REAL-WORLD PROBLEM CONTEXT
+====================================================
+Modern cyber attacks (APT, lateral movement, privilege escalation) are multi-stage, stealthy, and unfold over time. Traditional IDS and signature-based systems detect isolated alerts but fail to correlate attack sequences early. This system must predict future attack steps BEFORE execution by learning temporal and structural dependencies between entities in a cyber environment.
+
+====================================================
+ABSOLUTE REQUIREMENTS (NON-NEGOTIABLE)
+====================================================
+- Must run locally
+- Must be reproducible
+- Must reflect real SOC workflows
+- Must include explainability
+- Must include early-warning capability
+- Must handle class imbalance
+- Must justify all design choices
+
+====================================================
+DATA SOURCES (REALISM REQUIRED)
+====================================================
+Use at least ONE real dataset:
+- CICIDS2017
+- UNSW-NB15
+- DARPA IDS
+
+OPTIONAL realism boost:
+- Combine with simulated authentication logs
+- Inject synthetic APT-style attack chains
+
+====================================================
+ADVANCED GRAPH MODELING (MANDATORY)
+====================================================
+Construct a DYNAMIC, HETEROGENEOUS, TEMPORAL GRAPH.
+
+Node Types:
+- IP Address
+- Host
+- User Account
+- Process
+- Port
+- Service
+
+Edge Types:
+- Network Flow
+- Login Attempt
+- Privilege Escalation
+- Process Spawn
+- File Access
+
+Node Features:
+- Historical alert frequency
+- Role encoding (server, client, admin)
+- Temporal activity statistics
+- Centrality scores (degree, betweenness)
+
+Edge Features:
+- Timestamp
+- Protocol
+- Event category
+- Data volume
+- Directionality
+- Frequency over sliding window
+
+====================================================
+TEMPORAL INTELLIGENCE (CRITICAL)
+====================================================
+Use ONE of the following:
+- Temporal Graph Networks (TGN)
+- Snapshot-based GNN with time embeddings
+- Sliding window temporal attention
+
+The model must:
+- Learn attack progression
+- Capture order of events
+- Predict future malicious behavior at time t + Δt
+
+====================================================
+PREDICTION TASK (ADVANCED)
+====================================================
+Primary Task:
+- Predict probability of a node becoming malicious in the next Δt window
+
+Secondary Tasks (Multi-task Learning):
+- Attack stage classification (recon, lateral movement, exfiltration)
+- Risk score estimation for SOC prioritization
+
+====================================================
+MODEL REQUIREMENTS
+====================================================
+Implement:
+- Temporal GNN (preferred) OR GAT with temporal embeddings
+- Attention mechanism for important events
+- Regularization for noisy logs
+
+Loss Functions:
+- Binary cross-entropy
+- Focal loss (for imbalance)
+- Optional auxiliary loss for stage prediction
+
+====================================================
+BASELINE SYSTEMS (REALISTIC COMPARISON)
+====================================================
+Compare against:
+- Random Forest on tabular features
+- XGBoost
+- Rule-based IDS correlation logic
+
+Show why GNN outperforms them in early detection.
+
+====================================================
+EVALUATION (SOC-LEVEL METRICS)
+====================================================
+Report:
+- Precision / Recall / F1
+- ROC-AUC
+- Early Detection Time Gain
+- False Positive Reduction
+- Confusion Matrix
+- Alert Fatigue Reduction Analysis
+
+Explain why early detection matters more than raw accuracy.
+
+====================================================
+EXPLAINABILITY (MANDATORY)
+====================================================
+Provide:
+- Attention weight visualization
+- Important node/edge explanation
+- Subgraph responsible for prediction
+- SOC-readable explanation of alerts
+
+====================================================
+VISUALIZATION (REALISTIC)
+====================================================
+- Temporal attack graph evolution
+- Highlight predicted future attack paths
+- Risk heatmap of network
+- ROC curve & confusion matrix
+
+====================================================
+SYSTEM ARCHITECTURE
+====================================================
+Backend:
+- Python
+- FastAPI REST service
+
+Features:
+- Real-time event ingestion simulation
+- Sliding window inference
+- JSON-based alert output
+
+API Output:
+- Risk score
+- Predicted attack stage
+- Top contributing entities
+- Confidence level
+
+====================================================
+DEPLOYMENT REALISM
+====================================================
+- Batch training
+- Near-real-time inference simulation
+- Configurable thresholds for SOC tuning
+
+====================================================
+DELIVERABLES
+====================================================
+1. Project folder structure
+2. Complete runnable code
+3. Dataset preprocessing scripts
+4. Graph construction pipeline
+5. Temporal GNN model code
+6. Training + validation scripts
+7. Baseline implementations
+8. Inference API
+9. Visualization scripts
+10. README with setup
+11. Experimental results table
+12. Limitations
+13. Threats to validity
+14. Future work
+15. IEEE-style abstract, methodology, results, conclusion
+
+====================================================
+STRICT RULES
+====================================================
+- NO toy examples
+- NO placeholder metrics
+- NO skipped steps
+- NO vague explanations
+- Everything must be executable, measurable, and defensible
+
+Begin from dataset ingestion and end with SOC-ready predictions.
