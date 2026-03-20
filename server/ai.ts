@@ -36,7 +36,7 @@ const ANALYSIS_PROMPT = `Cybersecurity expert. Respond ONLY with valid JSON:
 // Chat function
 export async function getAIResponse(messages: ChatMessage[]): Promise<string> {
   try {
-    const model = genAI.getGenerativeModel({ model: "gemini-3-flash-preview" });
+    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
     
     const chatPrompt = [
       SYSTEM_PROMPT,
@@ -47,6 +47,9 @@ export async function getAIResponse(messages: ChatMessage[]): Promise<string> {
     return result.response.text()?.trim() || "Error generating response";
   } catch (error: any) {
     console.error("Gemini chat error:", error.message);
+    if (error.status === 429) {
+      return "API quota exceeded. Please try again later or upgrade your plan at https://ai.google.dev.";
+    }
     return "Gemini API error. Check key and quota.";
   }
 }
@@ -57,7 +60,7 @@ export async function analyzeThreat(
   networkData?: string
 ): Promise<AIAnalysis> {
   try {
-    const model = genAI.getGenerativeModel({ model: "gemini-3-flash-preview" });
+    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
     
     const prompt = `${ANALYSIS_PROMPT}\n\nAlert: ${alertData}\nNetwork: ${networkData || 'N/A'}`;
 
@@ -79,6 +82,13 @@ export async function analyzeThreat(
     };
   } catch (error: any) {
     console.error("Gemini analysis error:", error);
+    if (error.status === 429) {
+      return {
+        threatLevel: "QUOTA_EXCEEDED",
+        summary: "API quota exceeded. Unable to analyze threat at this time.",
+        recommendations: ["Wait for quota reset", "Upgrade to paid plan at https://ai.google.dev"],
+      };
+    }
     return {
       threatLevel: "UNKNOWN",
       summary: "API error",
