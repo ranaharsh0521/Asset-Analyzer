@@ -4,9 +4,9 @@ import dotenv from 'dotenv';
 // Load env explicitly
 dotenv.config();
 
-const apiKey = process.env.GOOGLE_API_KEY || process.env.OPENAI_API_KEY;
+const apiKey = process.env.GOOGLE_API_KEY;
 if (!apiKey || apiKey === 'invalid-key-use-.env') {
-  console.error('Missing API key. Set GOOGLE_API_KEY or OPENAI_API_KEY in .env');
+  console.error('Missing API key. Set GOOGLE_API_KEY in .env');
 }
 
 // Initialize Gemini
@@ -24,14 +24,7 @@ export interface AIAnalysis {
 }
 
 // System prompts
-const SYSTEM_PROMPT = `You are GNN-IDS AI Security Assistant - cybersecurity expert for:
-- Intrusion detection
-- Threat analysis
-- GNN security systems
-- Attack patterns
-- SOC recommendations
-
-Prioritize mitigation, risk assessment, actionable steps.`;
+const SYSTEM_PROMPT = `You are a helpful AI assistant. Answer questions on any topic, provide information, and engage in general conversation. Be friendly and informative.`;
 
 const ANALYSIS_PROMPT = `Cybersecurity expert. Respond ONLY with valid JSON:
 {
@@ -43,7 +36,7 @@ const ANALYSIS_PROMPT = `Cybersecurity expert. Respond ONLY with valid JSON:
 // Chat function
 export async function getAIResponse(messages: ChatMessage[]): Promise<string> {
   try {
-    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+    const model = genAI.getGenerativeModel({ model: "gemini-3-flash-preview" });
     
     const chatPrompt = [
       SYSTEM_PROMPT,
@@ -64,7 +57,7 @@ export async function analyzeThreat(
   networkData?: string
 ): Promise<AIAnalysis> {
   try {
-    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+    const model = genAI.getGenerativeModel({ model: "gemini-3-flash-preview" });
     
     const prompt = `${ANALYSIS_PROMPT}\n\nAlert: ${alertData}\nNetwork: ${networkData || 'N/A'}`;
 
@@ -85,7 +78,7 @@ export async function analyzeThreat(
       recommendations: ["Review manually"],
     };
   } catch (error: any) {
-    console.error("Gemini analysis error:", error.message);
+    console.error("Gemini analysis error:", error);
     return {
       threatLevel: "UNKNOWN",
       summary: "API error",
