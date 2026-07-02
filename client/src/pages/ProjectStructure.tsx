@@ -78,6 +78,7 @@ export default function ProjectStructure() {
                <p>ML Framework: PyTorch 2.0 + PyG (Geometric)</p>
                <p>Graph DB: NetworkX (In-memory) / Neo4j (Optional)</p>
                <p>Frontend: React + Recharts (Visualization)</p>
+               <p>Streaming Replay: TON-IoT live dataset feed</p>
              </CardContent>
            </Card>
            
