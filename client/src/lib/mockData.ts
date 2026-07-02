@@ -30,7 +30,7 @@ export const MOCK_RESULTS = {
 };
 
 export const MOCK_FILES = [
-  { name: "dataset/", type: "folder", children: ["CICIDS2017.csv", "preprocess.py"] },
+  { name: "dataset/", type: "folder", children: ["CICIDS2017.csv", "TON-IoT-live-replay.jsonl", "preprocess.py", "stream_replay.py"] },
   { name: "models/", type: "folder", children: ["tgn_model.py", "gat_model.py", "layers.py"] },
   { name: "scripts/", type: "folder", children: ["train.py", "eval.py", "inference_api.py"] },
   { name: "utils/", type: "folder", children: ["graph_builder.py", "metrics.py"] },
