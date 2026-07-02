@@ -1,0 +1,142 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@theme inline {
+  --color-background: hsl(222 32% 8%);
+  --color-foreground: hsl(210 24% 92%);
+
+  --color-card: hsl(222 28% 12%);
+  --color-card-foreground: hsl(210 24% 92%);
+
+  --color-popover: hsl(222 28% 12%);
+  --color-popover-foreground: hsl(210 24% 92%);
+
+  --color-primary: hsl(186 95% 55%);
+  --color-primary-foreground: hsl(222 32% 8%);
+
+  --color-secondary: hsl(222 20% 18%);
+  --color-secondary-foreground: hsl(210 24% 92%);
+
+  --color-muted: hsl(220 20% 16%);
+  --color-muted-foreground: hsl(214 18% 66%);
+
+  --color-accent: hsl(186 95% 55%);
+  --color-accent-foreground: hsl(222 32% 8%);
+
+  --color-destructive: hsl(0 80% 60%);
+  --color-destructive-foreground: hsl(0 0% 100%);
+
+  --color-success: hsl(140 70% 50%);
+  --color-warning: hsl(40 90% 60%);
+
+  --color-border: hsl(220 19% 21%);
+  --color-input: hsl(220 19% 21%);
+  --color-ring: hsl(186 95% 55%);
+
+  --radius-sm: 0.35rem;
+  --radius-md: 0.7rem;
+  --radius-lg: 1.2rem;
+
+  --font-sans: 'Manrope', sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  html {
+    @apply scroll-smooth;
+  }
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+    background-image:
+      radial-gradient(circle at top left, rgba(34, 211, 238, 0.12), transparent 28%),
+      radial-gradient(circle at top right, rgba(56, 189, 248, 0.08), transparent 24%),
+      linear-gradient(180deg, rgba(15, 23, 42, 0.96), rgba(6, 11, 20, 1));
+    background-attachment: fixed;
+  }
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-mono tracking-tight;
+  }
+}
+
+.glass-panel {
+  @apply bg-card/80 backdrop-blur-md border border-border/50 shadow-xl;
+}
+
+.app-shell {
+  position: relative;
+}
+
+.app-shell::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at 20% 20%, rgba(34, 211, 238, 0.08), transparent 22%),
+    radial-gradient(circle at 78% 12%, rgba(14, 165, 233, 0.07), transparent 20%),
+    radial-gradient(circle at 58% 78%, rgba(59, 130, 246, 0.05), transparent 20%);
+  z-index: 0;
+}
+
+.app-main {
+  position: relative;
+  z-index: 1;
+}
+
+.page-header {
+  @apply relative overflow-hidden rounded-[1.75rem] border border-white/10 bg-[linear-gradient(135deg,rgba(255,255,255,0.08),rgba(255,255,255,0.02))] p-6 md:p-8 shadow-[0_20px_60px_rgba(0,0,0,0.3)] backdrop-blur-xl;
+}
+
+.page-header::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(circle at 0% 0%, rgba(34, 211, 238, 0.18), transparent 30%),
+    linear-gradient(120deg, rgba(8, 16, 28, 0.35), rgba(8, 16, 28, 0));
+  pointer-events: none;
+}
+
+.page-header > * {
+  position: relative;
+  z-index: 1;
+}
+
+.page-kicker {
+  @apply mb-3 inline-flex items-center rounded-full border border-primary/20 bg-primary/10 px-3 py-1 text-[11px] font-mono uppercase tracking-[0.18em] text-primary;
+}
+
+.metric-surface {
+  @apply border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.06),rgba(255,255,255,0.02))] shadow-[0_20px_40px_rgba(0,0,0,0.25)] backdrop-blur-xl;
+}
+
+.panel-card {
+  @apply rounded-[1.5rem] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.06),rgba(255,255,255,0.025))] shadow-[0_18px_40px_rgba(0,0,0,0.24)] backdrop-blur-xl;
+}
+
+.panel-subtle {
+  @apply rounded-2xl border border-white/6 bg-black/20 backdrop-blur-md;
+}
+
+.cyber-border {
+  @apply border border-primary/20 hover:border-primary/50 transition-colors duration-300;
+}
+
+.text-glow {
+  text-shadow: 0 0 10px hsla(190, 90%, 50%, 0.3);
+}
+
+/* Custom Scrollbar for the terminal feel */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  @apply bg-background;
+}
+::-webkit-scrollbar-thumb {
+  @apply bg-secondary hover:bg-muted-foreground/50 rounded;
+}
