@@ -129,44 +129,29 @@ export default function Login({ onLogin }: { onLogin: () => void }) {
     event.preventDefault();
 
     if (!signInEmail.trim() || !signInPassword) {
-      toast({
-        title: "Missing credentials",
-        description: "Enter your email and password to continue.",
-        variant: "destructive",
-      });
+      toast({ title: "Missing credentials", description: "Enter your email and password.", variant: "destructive" });
       return;
     }
 
-    const user = validateCredentials(signInEmail, signInPassword);
-
-    if (!user) {
-      toast({
-        title: "Login failed",
-        description: "The email or password does not match any local account.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    setSignInPassword("");
-    setActiveFlow(
-      user.otpConfiguredAt
-        ? {
-            kind: "verify",
-            user,
+    setIsSubmitting(true);
+    import("@/lib/api").then(({ api }) => {
+      api.login(signInEmail, signInPassword, otpToken || undefined)
+        .then((result) => {
+          if (result.requiresTotp) {
+            setActiveFlow({ kind: "verify", user: { email: result.email!, name: "", password: "", otpSecret: "", otpConfiguredAt: "1", createdAt: "" } });
+            toast({ title: "2FA Required", description: "Enter your authenticator code." });
+            return;
           }
-        : {
-            kind: "setup",
-            user,
-            source: "signin",
-          },
-    );
-
-    toast({
-      title: user.otpConfiguredAt ? "Authenticator check required" : "Set up Google Authenticator",
-      description: user.otpConfiguredAt
-        ? "Enter the 6-digit code from your authenticator app."
-        : "Scan the QR code once, verify the code, and your next logins will ask only for TOTP.",
+          if (result.user && !result.user.totpEnabled) {
+            setActiveFlow({ kind: "setup", user: { email: result.user.email, name: result.user.name, password: "", otpSecret: "", otpConfiguredAt: null, createdAt: "" }, source: "signin" });
+            return;
+          }
+          onLogin();
+        })
+        .catch((err: Error) => {
+          toast({ title: "Login failed", description: err.message, variant: "destructive" });
+        })
+        .finally(() => setIsSubmitting(false));
     });
   }
 
@@ -200,33 +185,25 @@ export default function Login({ onLogin }: { onLogin: () => void }) {
       return;
     }
 
-    const result = registerUser({
-      name: signUpName,
-      email: signUpEmail,
-      password: signUpPassword,
+    setIsSubmitting(true);
+    import("@/lib/api").then(({ api }) => {
+      api.register(signUpName, signUpEmail, signUpPassword)
+        .then(() => {
+          setActiveFlow({
+            kind: "setup",
+            user: { email: signUpEmail, name: signUpName, password: "", otpSecret: "", otpConfiguredAt: null, createdAt: "" },
+            source: "signup",
+          });
+          setSignUpPassword("");
+          setConfirmPassword("");
+          toast({ title: "Account created", description: "Set up 2FA to complete registration." });
+        })
+        .catch((err: Error) => {
+          toast({ title: "Sign up failed", description: err.message, variant: "destructive" });
+        })
+        .finally(() => setIsSubmitting(false));
     });
-
-    if ("error" in result) {
-      toast({
-        title: "Sign up failed",
-        description: result.error,
-        variant: "destructive",
-      });
-      return;
-    }
-
-    setActiveFlow({
-      kind: "setup",
-      user: result.user,
-      source: "signup",
-    });
-    setSignUpPassword("");
-    setConfirmPassword("");
-
-    toast({
-      title: "Account created",
-      description: "Scan the QR code in Google Authenticator, then enter the 6-digit code to finish setup.",
-    });
+    return;
   }
 
   async function copySecretKey() {
@@ -285,42 +262,17 @@ export default function Login({ onLogin }: { onLogin: () => void }) {
 
     setIsSubmitting(true);
 
-    try {
-      if (!verifyTotpCode(activeFlow.user, otpToken)) {
-        toast({
-          title: "Invalid authenticator code",
-          description: "Check the current 6-digit code in Google Authenticator and try again.",
-          variant: "destructive",
-        });
-        return;
-      }
-
-      const authenticatedUser =
-        activeFlow.kind === "setup"
-          ? markUserTotpConfigured(activeFlow.user.email)
-          : activeFlow.user;
-
-      if (!authenticatedUser) {
-        toast({
-          title: "Authentication failed",
-          description: "The user record could not be finalized locally.",
-          variant: "destructive",
-        });
-        return;
-      }
-
-      rememberLoggedInUser(authenticatedUser.email);
-      toast({
-        title: activeFlow.kind === "setup" ? "Two-step verification enabled" : "Login verified",
-        description:
-          activeFlow.kind === "setup"
-            ? "Google Authenticator is now linked to this account."
-            : "The current TOTP code was accepted.",
-      });
-      onLogin();
-    } finally {
-      setIsSubmitting(false);
-    }
+    import("@/lib/api").then(({ api }) => {
+      api.verifyTotp(otpToken)
+        .then(() => {
+          toast({ title: "Verified", description: "Authentication successful." });
+          onLogin();
+        })
+        .catch((err: Error) => {
+          toast({ title: "Invalid code", description: err.message, variant: "destructive" });
+        })
+        .finally(() => setIsSubmitting(false));
+    });
   }
 
   return (

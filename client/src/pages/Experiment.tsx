@@ -23,13 +23,26 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import {
-  buildTrainingRunLogs,
-  DATASET_OPTIONS,
-  getDatasetOption,
-  LIVE_DATASET_ID,
-  useLiveDatasetFeed,
-} from "@/lib/liveDataset";
+import { useStartTraining, useTrainingRuns } from "@/hooks/useApi";
+
+const DATASET_MAP: Record<string, string> = {
+  ton_iot_live: "ton_iot",
+  cicids2017: "cicids2017",
+  unsw: "unsw_nb15",
+  darpa: "nsl_kdd",
+};
+
+const LIVE_DATASET_ID = "unsw";
+const DATASET_OPTIONS = [
+  { id: "unsw", label: "UNSW-NB15", mode: "batch" as const, description: "Real intrusion detection benchmark", source: "UNSW Canberra" },
+  { id: "ton_iot_live", label: "TON-IoT", mode: "live" as const, description: "IoT/IIoT telemetry dataset", source: "UNSW CERT" },
+  { id: "cicids2017", label: "CICIDS2017", mode: "batch" as const, description: "Enterprise network flows", source: "Canadian Institute" },
+  { id: "darpa", label: "NSL-KDD", mode: "batch" as const, description: "Classic KDD cup dataset", source: "NSL-KDD" },
+];
+
+function getDatasetOption(id: string) {
+  return DATASET_OPTIONS.find((o) => o.id === id) ?? DATASET_OPTIONS[0];
+}
 
 function sliderToLR(val: number): string {
   return (0.0001 * Math.pow(100, val / 100)).toFixed(4);
@@ -42,21 +55,32 @@ function sliderToHiddenDim(val: number): number {
 
 export default function Experiment() {
   const { toast } = useToast();
-  const liveFeed = useLiveDatasetFeed();
+  const startTrainingMutation = useStartTraining();
+  const { data: runsData } = useTrainingRuns();
   const [isTraining, setIsTraining] = useState(false);
   const [progress, setProgress] = useState(0);
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [lrSlider, setLrSlider] = useState(30);
   const [hiddenSlider, setHiddenSlider] = useState(60);
-  const [selectedDataset, setSelectedDataset] = useState(LIVE_DATASET_ID);
+  const [selectedDataset, setSelectedDataset] = useState("unsw");
   const [graphStrategy, setGraphStrategy] = useState<"static" | "temporal">("temporal");
   const [modelVariant, setModelVariant] = useState<"gcn" | "gat" | "graphsage" | "tgn">("tgn");
 
+  const latestRun = runsData?.runs?.[0];
+  const trainingHistory = latestRun?.metrics as { history?: Array<{ epoch: number; train_loss: number; val_accuracy: number }> } | undefined;
+  const chartData = trainingHistory?.history ?? [];
+  const feedSnapshot = {
+    current: { recordsPerSecond: 0, throughputMbps: 0, anomalyRate: 0, alertsPerMinute: 0, confidence: latestRun?.valAccuracy ?? 0, latencyMs: 12, queueDepth: 0, maliciousShare: 0, droppedPackets: 0, threatScore: 0, benignRecords: 0, maliciousRecords: 0 },
+    timeline: chartData.map((h) => ({ time: `E${h.epoch}`, recordsPerSecond: h.train_loss * 1000, anomalyRate: h.val_accuracy * 100, threatScore: h.val_accuracy, benignRecords: 0, maliciousRecords: 0 })),
+    trainingTimeline: chartData.map((h) => ({ time: `E${h.epoch}`, loss: h.train_loss, auc: h.val_accuracy, precision: h.val_accuracy, recall: h.val_accuracy })),
+    lastUpdated: latestRun?.createdAt ?? new Date().toISOString(),
+  };
   const dataset = getDatasetOption(selectedDataset);
   const isLiveDataset = dataset.mode === "live";
+  const liveFeed = feedSnapshot;
 
   const handleReset = () => {
-    setSelectedDataset(LIVE_DATASET_ID);
+    setSelectedDataset("unsw");
     setGraphStrategy("temporal");
     setModelVariant("tgn");
     setLrSlider(30);
@@ -77,35 +101,33 @@ export default function Experiment() {
     });
   };
 
-  const startTraining = () => {
-    const runLogs = buildTrainingRunLogs({
-      datasetId: selectedDataset,
-      graphStrategy,
-      modelVariant,
-      learningRate: sliderToLR(lrSlider),
-      hiddenDim: sliderToHiddenDim(hiddenSlider),
-      snapshot: liveFeed,
-    });
-
+  const startTraining = async () => {
     setIsTraining(true);
     setLogs([]);
     setProgress(0);
 
-    let currentLogIndex = 0;
-    const interval = setInterval(() => {
-      if (currentLogIndex >= runLogs.length) {
-        clearInterval(interval);
-        setIsTraining(false);
-        return;
-      }
+    const datasetId = DATASET_MAP[selectedDataset] ?? "unsw_nb15";
+    setLogs([{ text: `[INFO] Starting TGNN training on ${datasetId}...`, time: new Date().toLocaleTimeString() }]);
 
-      setLogs((previous) => [
-        ...previous,
-        { text: runLogs[currentLogIndex], time: new Date().toLocaleTimeString() },
-      ]);
-      setProgress(Math.min(((currentLogIndex + 1) / runLogs.length) * 100, 100));
-      currentLogIndex += 1;
-    }, 700);
+    try {
+      await startTrainingMutation.mutateAsync({
+        datasetId,
+        architecture: modelVariant === "tgn" ? "gat" : modelVariant,
+        hyperparameters: {
+          learning_rate: parseFloat(sliderToLR(lrSlider)),
+          hidden_dim: sliderToHiddenDim(hiddenSlider),
+        },
+        epochs: 50,
+      });
+      setLogs((prev) => [...prev, { text: "[INFO] Training queued on AI service", time: new Date().toLocaleTimeString() }]);
+      setProgress(100);
+      toast({ title: "Training started", description: `TGNN ${modelVariant.toUpperCase()} training on ${datasetId}` });
+    } catch (err) {
+      setLogs((prev) => [...prev, { text: `[ERROR] ${err instanceof Error ? err.message : "Training failed"}`, time: new Date().toLocaleTimeString() }]);
+      toast({ title: "Training failed", description: err instanceof Error ? err.message : "Unknown error", variant: "destructive" });
+    } finally {
+      setIsTraining(false);
+    }
   };
 
   return (

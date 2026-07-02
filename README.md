@@ -1,42 +1,124 @@
-# AI-Driven Cyber-Attack Prediction Using Temporal GNNs
+# AI-Driven Cyber Attack Prediction using Temporal Graph Neural Networks (TGNN)
 
-This research prototype demonstrates a Temporal Graph Neural Network (TGNN) approach to intrusion detection and attack stage prediction.
+Production-grade Security Operations Center (SOC) platform with real TGNN models, PostgreSQL backend, JWT authentication, and live WebSocket alerts.
 
-## 🚀 Quick Start (Local Host)
-  
-Follow these steps to run the project on your local machine:
+## Architecture
 
-### 1. Prerequisites
-- **Node.js** (v20 or higher)
-- **npm** (comes with Node.js)
+```
+┌─────────────────┐     ┌──────────────────┐     ┌─────────────────────┐
+│  React 19 UI    │────▶│  Express API     │────▶│  FastAPI AI Service │
+│  (Vite + TS)    │ WS  │  JWT + RBAC      │     │  PyTorch Geometric  │
+└─────────────────┘     │  PostgreSQL      │     │  TGNN (GAT/TGN/...)  │
+                        │  Redis           │     └─────────────────────┘
+                        └──────────────────┘
+```
 
-### 2. Setup
-Download the project ZIP from Replit and extract it. Open your terminal in the project folder.
+## Features
 
-### 3. Install Dependencies
+- **TGNN Models**: Graph Attention Networks with temporal encoding for attack prediction
+- **Real Datasets**: UNSW-NB15, TON-IoT, CICIDS2017, NSL-KDD (auto-download)
+- **Attack Stages**: Reconnaissance → Scanning → Credential Attack → ... → Impact
+- **Explainability**: GAT attention weights, Integrated Gradients, SHAP approximation
+- **Risk Engine**: Node, subnet, department, organization, propagation risk
+- **SOC Dashboards**: Mission Control, Threat Journey, Model Studio, Alert Center, Admin Panel
+- **Security**: JWT + refresh tokens, RBAC, bcrypt, TOTP 2FA, Helmet, rate limiting
+- **Real-time**: WebSocket alerts, live predictions, training progress
+
+## Quick Start
+
+### Prerequisites
+
+- Node.js 20+
+- Python 3.11+
+- PostgreSQL 16
+- Redis 7
+- Docker (optional)
+
+### 1. Environment
+
+```bash
+cp .env.example .env
+# Edit DATABASE_URL, JWT secrets, etc.
+```
+
+### 2. Database
+
 ```bash
 npm install
+npm run db:push
+npm run db:seed
 ```
 
-### 4. Run Locally
-Execute the following command to start the frontend dashboard:
+### 3. AI Service
+
 ```bash
-npm run dev:client
+cd ai
+pip install -r requirements.txt
+python -m uvicorn app.main:app --reload --port 8000
 ```
 
-### 5. Access the Dashboard
-Once the server starts, open your browser and navigate to:
-**[http://localhost:5000](http://localhost:5000)**
+### 4. Train TGNN Model
 
----
+```bash
+curl -X POST http://localhost:8000/api/v1/train \
+  -H "Content-Type: application/json" \
+  -d '{"dataset_id": "unsw_nb15", "architecture": "gat", "epochs": 50}'
+```
 
-## 🛠 Project Structure
-- `client/src/pages/`: All 8 research dashboards (SOC, Risk, Evaluation, etc.)
-- `client/src/components/viz/`: Custom HTML5 Canvas and Recharts visualizations.
-- `client/src/lib/advancedMockData.ts`: Synthetic intelligence datasets for demonstration.
+### 5. Start Application
 
-## 🔬 Key Features
-- **Temporal Graph Visualization**: Real-time simulation of network traffic nodes.
-- **Attack Intelligence**: Prediction of attack stages from Reconnaissance to Exfiltration.
-- **Explainability**: Heatmaps showing GNN attention weights for security analyst review.
-- **Early Detection**: Comparison metrics showing gain over traditional IDS.
+```bash
+npm run dev
+# Open http://localhost:5000
+# Login: admin@gnn-ids.local / Admin@123456
+```
+
+### Docker (Full Stack)
+
+```bash
+docker compose up -d
+```
+
+## Project Structure
+
+```
+Asset-Analyzer/
+├── client/          # React 19 frontend
+├── server/          # Express API + WebSocket
+├── shared/          # Drizzle ORM schema
+├── ai/              # FastAPI + PyTorch TGNN
+├── nginx/           # Reverse proxy config
+├── docker-compose.yml
+└── docs/            # Documentation
+```
+
+## API Endpoints
+
+| Method | Path | Description |
+|--------|------|-------------|
+| POST | /api/auth/login | JWT login |
+| POST | /api/auth/register | User registration |
+| POST | /api/predict | TGNN inference |
+| GET | /api/alerts | Security alerts |
+| GET | /api/dashboard/metrics | SOC metrics |
+| GET | /api/network/topology | Graph topology |
+| POST | /api/training/start | Start TGNN training |
+| GET | /api/metrics | Model evaluation metrics |
+| WS | /ws | Live alerts & predictions |
+
+## Default Credentials
+
+- **Admin**: admin@gnn-ids.local / Admin@123456
+- Enable 2FA via Admin Panel after first login
+
+## Research
+
+This project implements Temporal Graph Neural Networks for cyber attack prediction suitable for:
+- Final Year Engineering Projects
+- MSc/PhD research extensions
+- Cybersecurity portfolio demonstrations
+- Academic publications on GNN-based IDS
+
+## License
+
+MIT

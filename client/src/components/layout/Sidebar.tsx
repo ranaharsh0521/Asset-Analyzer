@@ -46,6 +46,8 @@ export function Sidebar() {
       title: "Explore",
       items: [
         { href: "/network-scanner", label: "Network Lens", icon: ScanSearch, hint: "Topology and live scans" },
+        { href: "/alerts", label: "Alert Center", icon: Shield, hint: "Incidents and response" },
+        { href: "/admin", label: "Admin Panel", icon: Activity, hint: "System management" },
         { href: "/files", label: "Project Atlas", icon: FileText, hint: "Files and architecture" },
       ],
     },

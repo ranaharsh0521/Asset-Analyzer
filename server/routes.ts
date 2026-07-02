@@ -1,16 +1,26 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
-import { storage } from "./storage";
+import authRoutes from "./routes/auth.routes";
+import apiRoutes from "./routes/api.routes";
+import { setupSecurity } from "./middleware/security";
+import { setupWebSocket } from "./websocket";
+import { seedDatabase } from "./seed";
+import { syncNetworkFromDataset } from "./sync-network";
 
-export async function registerRoutes(
-  httpServer: Server,
-  app: Express
-): Promise<Server> {
-  // put application routes here
-  // prefix all routes with /api
+export async function registerRoutes(httpServer: Server, app: Express): Promise<Server> {
+  setupSecurity(app);
 
-  // use storage to perform CRUD operations on the storage interface
-  // e.g. storage.insertUser(user) or storage.getUserByUsername(username)
+  app.use("/api/auth", authRoutes);
+  app.use("/api", apiRoutes);
+
+  try {
+    await seedDatabase();
+    await syncNetworkFromDataset();
+  } catch (error) {
+    console.warn("[routes] Initialization skipped (database/AI may not be ready):", error);
+  }
+
+  setupWebSocket(httpServer);
 
   return httpServer;
 }
