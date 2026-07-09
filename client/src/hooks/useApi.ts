@@ -33,10 +33,29 @@ export function useTopology() {
   });
 }
 
+export function useNetworkScan() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: api.scanNetwork.bind(api),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["network"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+    },
+  });
+}
+
 export function usePredictions() {
   return useQuery({
     queryKey: ["predictions"],
     queryFn: () => api.getPredictions(50),
+    refetchInterval: 5000,
+  });
+}
+
+export function useAttackStage() {
+  return useQuery({
+    queryKey: ["attack-stage"],
+    queryFn: () => api.getAttackStage(),
     refetchInterval: 5000,
   });
 }
@@ -84,6 +103,18 @@ export function useStartTraining() {
     mutationFn: api.startTraining.bind(api),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["training"] });
+    },
+  });
+}
+
+export function useParsePackets() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ file, name }: { file: File; name: string }) => api.parsePackets(file, name),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["predictions"] });
+      queryClient.invalidateQueries({ queryKey: ["network"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard"] });
     },
   });
 }

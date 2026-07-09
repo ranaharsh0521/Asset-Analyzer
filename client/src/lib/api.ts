@@ -46,6 +46,7 @@ export interface Alert {
 export interface NetworkNode {
   id: string;
   ipAddress: string;
+  macAddress: string | null;
   hostname: string | null;
   nodeType: string;
   status: string;
@@ -54,6 +55,13 @@ export interface NetworkNode {
   os: string | null;
   vendor: string | null;
   lastSeenAt: string;
+  packets: number | null;
+  bytes: number | null;
+  failedLogins: number | null;
+  connectionCount: number | null;
+  subnet: string | null;
+  department: string | null;
+  features: Record<string, number> | null;
 }
 
 export interface Topology {
@@ -72,6 +80,15 @@ export interface Prediction {
   riskScore: number;
   isCompromised: boolean;
   createdAt: string;
+  explanation: {
+    node_importance?: Array<{ node_index: number; importance: number; type: string }>;
+    top_attack_type?: string;
+    predicted_progression?: string;
+    expected_next?: string;
+  } | null;
+  rawFeatures: Record<string, unknown> | null;
+  sourceNodeId: string | null;
+  targetNodeId: string | null;
 }
 
 export interface TrainingRun {
@@ -87,6 +104,43 @@ export interface TrainingRun {
   metrics: Record<string, unknown>;
   gpuUtilization: number | null;
   createdAt: string;
+}
+
+export interface RiskScore {
+  id: string;
+  entityType: string;
+  entityId: string;
+  entityName: string;
+  nodeRisk: number | null;
+  subnetRisk: number | null;
+  departmentRisk: number | null;
+  organizationRisk: number | null;
+  propagationRisk: number | null;
+  businessImpact: number | null;
+  factors: Record<string, number> | null;
+  computedAt: string;
+}
+
+export interface AttackStageSummary {
+  latest: Prediction | null;
+  stageCounts: Record<string, number>;
+  currentStage: string;
+  predictedNextStage: string | null;
+  threatLevel: string;
+  probability: number;
+  confidence: number;
+  updatedAt: string | null;
+}
+
+export interface SystemHealth {
+  status: string;
+  ai: {
+    status?: string;
+    model_loaded?: boolean;
+    gpu_available?: boolean;
+    device?: string;
+  };
+  timestamp: string;
 }
 
 class ApiClient {
@@ -238,8 +292,19 @@ class ApiClient {
     return this.request("/api/network/topology");
   }
 
+  async scanNetwork(params: { scanRange?: string; datasetId?: string; windowSeconds?: number }) {
+    return this.request<{ scan: { nodes: number; edges: number } | null; datasetId: string; windowSeconds: number }>("/api/network/scan", {
+      method: "POST",
+      body: JSON.stringify(params),
+    });
+  }
+
   async getPredictions(limit = 50) {
     return this.request<{ predictions: Prediction[] }>(`/api/predictions?limit=${limit}`);
+  }
+
+  async getAttackStage() {
+    return this.request<AttackStageSummary>("/api/attack-stage");
   }
 
   async predict(features: Record<string, unknown>, graphSnapshot?: Record<string, unknown>) {
@@ -258,7 +323,7 @@ class ApiClient {
 
   async getRiskScores(entityType?: string) {
     const qs = entityType ? `?entity_type=${entityType}` : "";
-    return this.request(`/api/risk/scores${qs}`);
+    return this.request<{ scores: RiskScore[] }>(`/api/risk/scores${qs}`);
   }
 
   async computeRisk(entityType: string, entityId: string, graphSnapshot: Record<string, unknown>) {
@@ -331,7 +396,28 @@ class ApiClient {
     });
   }
 
-  async getHealth() {
+  async parsePackets(file: File, name: string) {
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("name", name);
+
+    const headers: Record<string, string> = {};
+    if (this.accessToken) headers.Authorization = `Bearer ${this.accessToken}`;
+
+    const response = await fetch(`${API_BASE}/api/packets/parse`, {
+      method: "POST",
+      headers,
+      body: formData,
+    });
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ error: "Packet parsing failed" }));
+      throw new Error(error.error || "Packet parsing failed");
+    }
+    return response.json();
+  }
+
+  async getHealth(): Promise<SystemHealth> {
     return this.request("/api/health");
   }
 

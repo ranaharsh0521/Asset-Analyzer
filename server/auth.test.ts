@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { ROLE_PERMISSIONS, hashPassword, verifyPassword } from "../auth";
+import { ROLE_PERMISSIONS, hashPassword, verifyPassword } from "./auth";
 
 describe("Auth", () => {
   it("hashes and verifies passwords", async () => {

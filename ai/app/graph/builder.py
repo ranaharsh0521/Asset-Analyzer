@@ -158,7 +158,7 @@ class TemporalGraphBuilder:
                 float(NODE_TYPE_MAP.get(node["type"], 1)),
                 float(node["bytes"] / max(node["packets"], 1)),
                 float(node["connections"] / max(len(nodes), 1)),
-                0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+                0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
             ])
         return features
 

@@ -80,6 +80,22 @@ export const sessions = pgTable("sessions", {
   index("sessions_expires_idx").on(table.expiresAt),
 ]);
 
+export const apiKeys = pgTable("api_keys", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  name: varchar("name", { length: 255 }).notNull(),
+  keyHash: text("key_hash").notNull().unique(),
+  keyPrefix: varchar("key_prefix", { length: 16 }).notNull(),
+  scopes: jsonb("scopes").$type<string[]>().notNull().default([]),
+  lastUsedAt: timestamp("last_used_at", { withTimezone: true }),
+  expiresAt: timestamp("expires_at", { withTimezone: true }),
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  index("api_keys_user_idx").on(table.userId),
+  index("api_keys_hash_idx").on(table.keyHash),
+]);
+
 export const datasets = pgTable("datasets", {
   id: uuid("id").primaryKey().defaultRandom(),
   name: varchar("name", { length: 255 }).notNull(),
@@ -318,6 +334,7 @@ export const systemLogs = pgTable("system_logs", {
 export const usersRelations = relations(users, ({ one, many }) => ({
   role: one(roles, { fields: [users.roleId], references: [roles.id] }),
   sessions: many(sessions),
+  apiKeys: many(apiKeys),
   alerts: many(alerts),
 }));
 
@@ -360,6 +377,7 @@ export type Role = typeof roles.$inferSelect;
 export type User = typeof users.$inferSelect;
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type Session = typeof sessions.$inferSelect;
+export type ApiKey = typeof apiKeys.$inferSelect;
 export type Dataset = typeof datasets.$inferSelect;
 export type MlModel = typeof mlModels.$inferSelect;
 export type TrainingRun = typeof trainingRuns.$inferSelect;

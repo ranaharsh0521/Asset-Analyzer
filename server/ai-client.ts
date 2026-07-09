@@ -99,6 +99,28 @@ export class AIServiceClient {
     if (!res.ok) throw new Error("Metrics unavailable");
     return res.json();
   }
+
+  async deployModel(candidatePath: string) {
+    const res = await fetch(`${this.baseUrl}/api/v1/models/deploy`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ candidate_path: candidatePath }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ detail: "Model deployment failed" }));
+      throw new Error(err.detail || "Model deployment failed");
+    }
+    return res.json();
+  }
+
+  async parsePackets(formData: FormData) {
+    const res = await fetch(`${this.baseUrl}/api/v1/packets/parse`, {
+      method: "POST",
+      body: formData,
+    });
+    if (!res.ok) throw new Error("Packet parsing failed");
+    return res.json();
+  }
 }
 
 export const aiService = new AIServiceClient();

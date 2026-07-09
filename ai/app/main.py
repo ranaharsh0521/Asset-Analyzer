@@ -16,6 +16,7 @@ from pydantic import BaseModel, Field
 from app.graph.builder import TemporalGraphBuilder
 from app.services.explainability import explainability_service
 from app.services.inference import inference_service
+from app.services.packet_parser import CAPTURE_DIR, packet_parser_service
 from app.services.risk_engine import risk_engine
 from app.services.training import training_service
 
@@ -68,6 +69,10 @@ class RiskComputeRequest(BaseModel):
     entity_type: str
     entity_id: str
     graph_snapshot: dict[str, Any]
+
+
+class DeployModelRequest(BaseModel):
+    candidate_path: str
 
 
 @app.get("/health")
@@ -132,6 +137,14 @@ def get_metrics(model_id: str | None = None):
     return training_service.get_metrics(model_id)
 
 
+@app.post("/api/v1/models/deploy")
+def deploy_model(req: DeployModelRequest):
+    try:
+        return training_service.deploy_model(req.candidate_path)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.post("/api/v1/datasets/upload")
 async def upload_dataset(
     file: UploadFile = File(...),
@@ -147,8 +160,17 @@ async def upload_dataset(
         dest.write_bytes(content)
 
         record_count = 0
-        if ext.lower() == ".csv":
+        if ext.lower() in (".csv", ".flow"):
             df = pd.read_csv(dest, nrows=100000)
+            record_count = len(df)
+        elif ext.lower() in (".json", ".jsonl", ".log"):
+            try:
+                df = pd.read_json(dest, lines=True)
+            except ValueError:
+                try:
+                    df = pd.read_json(dest)
+                except ValueError:
+                    df = pd.read_csv(dest, sep=None, engine="python", nrows=100000)
             record_count = len(df)
         elif ext.lower() in (".pcap", ".pcapng"):
             record_count = len(content) // 100
@@ -161,6 +183,22 @@ async def upload_dataset(
             "record_count": record_count,
             "file_type": ext.lstrip("."),
         }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/v1/packets/parse")
+async def parse_packets(
+    file: UploadFile = File(...),
+    name: str = Form(""),
+    window_seconds: int = Form(30),
+):
+    try:
+        file_id = str(uuid.uuid4())
+        ext = Path(file.filename or "capture.pcap").suffix
+        dest = CAPTURE_DIR / f"{file_id}{ext}"
+        dest.write_bytes(await file.read())
+        return packet_parser_service.parse_capture(dest, name or file.filename or dest.name, window_seconds)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

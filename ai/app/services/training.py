@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import shutil
 import threading
 import uuid
 from datetime import datetime
@@ -103,7 +104,7 @@ class TrainingService:
 
             attack_labels, stage_labels = self._extract_labels(df)
             attack_encoder = LabelEncoder()
-            attack_encoder.fit(ATTACK_TYPES[: len(set(attack_labels))])
+            attack_encoder.fit(ATTACK_TYPES)
             stage_encoder = LabelEncoder()
             stage_encoder.fit(ATTACK_STAGES)
 
@@ -222,16 +223,15 @@ class TrainingService:
 
             metrics = self._compute_metrics(all_attack_true, all_attack_preds, all_stage_true, all_stage_preds)
             MODEL_DIR.mkdir(parents=True, exist_ok=True)
-            model_path = MODEL_DIR / "tgnn_model.pt"
+            model_path = MODEL_DIR / f"candidate_{run_id}.pt"
             torch.save({
                 "model_state": model.state_dict(),
                 "architecture": architecture,
                 "metrics": metrics,
+                "dataset_id": dataset_id,
+                "run_id": run_id,
                 "trained_at": datetime.utcnow().isoformat(),
             }, model_path)
-
-            from app.services.inference import inference_service
-            inference_service._load_model()
 
             with self._lock:
                 self.active_runs[run_id]["status"] = "completed"
@@ -299,6 +299,32 @@ class TrainingService:
                 "trained_at": checkpoint.get("trained_at"),
             }
         return {"model_loaded": False, "metrics": {}}
+
+    def deploy_model(self, candidate_path: str) -> dict[str, Any]:
+        candidate = Path(candidate_path)
+        if not candidate.exists():
+            raise FileNotFoundError(f"Candidate checkpoint not found: {candidate_path}")
+
+        MODEL_DIR.mkdir(parents=True, exist_ok=True)
+        active_path = MODEL_DIR / "tgnn_model.pt"
+        previous_path = MODEL_DIR / "tgnn_model.previous.pt"
+
+        if active_path.exists():
+            shutil.copy2(active_path, previous_path)
+        shutil.copy2(candidate, active_path)
+
+        from app.services.inference import inference_service
+        inference_service._load_model()
+
+        checkpoint = torch.load(active_path, map_location="cpu", weights_only=False)
+        return {
+            "deployed": True,
+            "active_path": str(active_path),
+            "previous_path": str(previous_path) if previous_path.exists() else None,
+            "metrics": checkpoint.get("metrics", {}),
+            "architecture": checkpoint.get("architecture", "gat"),
+            "trained_at": checkpoint.get("trained_at"),
+        }
 
 
 training_service = TrainingService()

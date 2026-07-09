@@ -6,7 +6,6 @@ import os
 import urllib.request
 from pathlib import Path
 
-import numpy as np
 import pandas as pd
 
 
@@ -63,8 +62,7 @@ def load_unsw_nb15(max_rows: int = 100000) -> pd.DataFrame:
         print(f"[data] Loaded UNSW-NB15: {len(df)} records, attacks: {(df['label']==1).sum()}")
         return df
     except Exception as e:
-        print(f"[data] UNSW download failed ({e}), using local fallback")
-        return _generate_from_unsw_schema(max_rows)
+        raise RuntimeError(f"UNSW-NB15 is unavailable and no synthetic fallback is allowed: {e}") from e
 
 
 def load_nsl_kdd(max_rows: int = 50000) -> pd.DataFrame:
@@ -91,8 +89,7 @@ def load_nsl_kdd(max_rows: int = 50000) -> pd.DataFrame:
         print(f"[data] Loaded NSL-KDD: {len(df)} records")
         return df
     except Exception as e:
-        print(f"[data] NSL-KDD download failed ({e})")
-        return load_unsw_nb15(max_rows)
+        raise RuntimeError(f"NSL-KDD is unavailable and no synthetic fallback is allowed: {e}") from e
 
 
 def load_ton_iot(max_rows: int = 50000) -> pd.DataFrame:
@@ -112,10 +109,7 @@ def load_ton_iot(max_rows: int = 50000) -> pd.DataFrame:
         print(f"[data] Loaded TON-IoT: {len(df)} records")
         return df
     except Exception as e:
-        print(f"[data] TON-IoT download failed ({e}), loading UNSW-NB15 as IoT proxy")
-        df = load_unsw_nb15(max_rows)
-        iot_mask = df["service"].isin(["dns", "http", "ftp", "smtp"]) | (df["dbytes"] < 10000)
-        return df[iot_mask].head(max_rows // 2) if iot_mask.any() else df
+        raise RuntimeError(f"TON-IoT is unavailable and no proxy or synthetic fallback is allowed: {e}") from e
 
 
 def load_cicids2017(max_rows: int = 50000) -> pd.DataFrame:
@@ -140,11 +134,22 @@ def load_cicids2017(max_rows: int = 50000) -> pd.DataFrame:
         print(f"[data] Loaded CICIDS2017: {len(df)} records")
         return df
     except Exception as e:
-        print(f"[data] CICIDS2017 download failed ({e})")
-        return load_unsw_nb15(max_rows)
+        raise RuntimeError(f"CICIDS2017 is unavailable and no synthetic fallback is allowed: {e}") from e
 
 
 def load_dataset(source: str, max_rows: int = 100000) -> pd.DataFrame:
+    source_path = Path(source)
+    if source_path.exists():
+        suffix = source_path.suffix.lower()
+        if suffix in {".csv", ".flow"}:
+            df = pd.read_csv(source_path, nrows=max_rows)
+            df.columns = df.columns.str.strip()
+            return df
+        if suffix in {".pcap", ".pcapng", ".json", ".jsonl", ".log"}:
+            from app.services.packet_parser import packet_parser_service
+            return packet_parser_service.load_flows(source_path).head(max_rows)
+        raise RuntimeError(f"Unsupported local dataset format: {suffix}")
+
     loaders = {
         "unsw_nb15": load_unsw_nb15,
         "ton_iot": load_ton_iot,
@@ -153,28 +158,3 @@ def load_dataset(source: str, max_rows: int = 100000) -> pd.DataFrame:
     }
     loader = loaders.get(source, load_unsw_nb15)
     return loader(max_rows)
-
-
-def _generate_from_unsw_schema(n: int) -> pd.DataFrame:
-    """Generate data matching UNSW-NB15 schema when download fails."""
-    rng = np.random.default_rng(42)
-    attack_cats = ["Normal", "Generic", "Exploits", "Fuzzers", "DoS", "Reconnaissance", "Analysis", "Backdoor", "Shellcode", "Worms"]
-    protos = ["tcp", "udp", "icmp", "arp", "ospf"]
-    states = ["FIN", "INT", "CON", "REQ", "RST", "ACC", "CLO"]
-
-    data = {
-        "src_ip": [f"10.0.{rng.integers(0,255)}.{rng.integers(1,254)}" for _ in range(n)],
-        "dst_ip": [f"10.1.{rng.integers(0,255)}.{rng.integers(1,254)}" for _ in range(n)],
-        "src_port": rng.integers(1024, 65535, n),
-        "dst_port": rng.integers(1, 65535, n),
-        "protocol": rng.choice(protos, n),
-        "state": rng.choice(states, n),
-        "duration": rng.exponential(1.0, n),
-        "src_bytes": rng.integers(0, 100000, n),
-        "dst_bytes": rng.integers(0, 100000, n),
-        "src_packets": rng.integers(1, 100, n),
-        "dst_packets": rng.integers(1, 100, n),
-        "attack_type": rng.choice(attack_cats, n, p=[0.6]+[0.4/9]*9),
-        "label": rng.choice([0, 1], n, p=[0.6, 0.4]),
-    }
-    return pd.DataFrame(data)
