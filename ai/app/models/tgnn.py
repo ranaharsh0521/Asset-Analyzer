@@ -67,6 +67,13 @@ class TGNNModel(nn.Module):
         self.hidden_dim = hidden_dim
         self.node_features = node_features
 
+        # Input feature standardization. Populated from training-set statistics
+        # (see TrainingService) and saved in the checkpoint, so train and
+        # inference normalize identically. Defaults are identity (mean 0, std 1)
+        # so checkpoints trained before this change still behave unchanged.
+        self.register_buffer("feat_mean", torch.zeros(node_features))
+        self.register_buffer("feat_std", torch.ones(node_features))
+
         self.input_proj = nn.Linear(node_features, hidden_dim)
         self.temporal_encoder = nn.GRU(hidden_dim, hidden_dim, batch_first=True)
 
@@ -100,6 +107,7 @@ class TGNNModel(nn.Module):
         edge_index: torch.Tensor,
         temporal_seq: torch.Tensor | None = None,
     ) -> dict[str, torch.Tensor]:
+        x = (x - self.feat_mean) / (self.feat_std + 1e-6)
         h = F.relu(self.input_proj(x))
         h = F.relu(self.conv1(h, edge_index))
         h = self.dropout(h)

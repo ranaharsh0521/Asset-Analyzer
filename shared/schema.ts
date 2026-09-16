@@ -80,22 +80,6 @@ export const sessions = pgTable("sessions", {
   index("sessions_expires_idx").on(table.expiresAt),
 ]);
 
-export const apiKeys = pgTable("api_keys", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
-  name: varchar("name", { length: 255 }).notNull(),
-  keyHash: text("key_hash").notNull().unique(),
-  keyPrefix: varchar("key_prefix", { length: 16 }).notNull(),
-  scopes: jsonb("scopes").$type<string[]>().notNull().default([]),
-  lastUsedAt: timestamp("last_used_at", { withTimezone: true }),
-  expiresAt: timestamp("expires_at", { withTimezone: true }),
-  isActive: boolean("is_active").notNull().default(true),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-}, (table) => [
-  index("api_keys_user_idx").on(table.userId),
-  index("api_keys_hash_idx").on(table.keyHash),
-]);
-
 export const datasets = pgTable("datasets", {
   id: uuid("id").primaryKey().defaultRandom(),
   name: varchar("name", { length: 255 }).notNull(),
@@ -112,6 +96,7 @@ export const datasets = pgTable("datasets", {
 }, (table) => [
   index("datasets_source_idx").on(table.source),
   index("datasets_status_idx").on(table.status),
+  index("datasets_created_idx").on(table.createdAt),
 ]);
 
 export const mlModels = pgTable("ml_models", {
@@ -128,6 +113,7 @@ export const mlModels = pgTable("ml_models", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (table) => [
   index("ml_models_active_idx").on(table.isActive),
+  index("ml_models_created_idx").on(table.createdAt),
 ]);
 
 export const trainingRuns = pgTable("training_runs", {
@@ -152,6 +138,7 @@ export const trainingRuns = pgTable("training_runs", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (table) => [
   index("training_runs_status_idx").on(table.status),
+  index("training_runs_created_idx").on(table.createdAt),
 ]);
 
 export const networkNodes = pgTable("network_nodes", {
@@ -210,7 +197,10 @@ export const attackGraphs = pgTable("attack_graphs", {
   snapshotData: jsonb("snapshot_data").$type<Record<string, unknown>>().notNull(),
   datasetId: uuid("dataset_id").references(() => datasets.id),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-});
+}, (table) => [
+  index("attack_graphs_dataset_idx").on(table.datasetId),
+  index("attack_graphs_created_idx").on(table.createdAt),
+]);
 
 export const predictions = pgTable("predictions", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -233,6 +223,7 @@ export const predictions = pgTable("predictions", {
   index("predictions_attack_type_idx").on(table.attackType),
   index("predictions_stage_idx").on(table.attackStage),
   index("predictions_created_idx").on(table.createdAt),
+  index("predictions_model_idx").on(table.modelId),
 ]);
 
 export const riskScores = pgTable("risk_scores", {
@@ -329,12 +320,12 @@ export const systemLogs = pgTable("system_logs", {
 }, (table) => [
   index("system_logs_level_idx").on(table.level),
   index("system_logs_service_idx").on(table.service),
+  index("system_logs_created_idx").on(table.createdAt),
 ]);
 
 export const usersRelations = relations(users, ({ one, many }) => ({
   role: one(roles, { fields: [users.roleId], references: [roles.id] }),
   sessions: many(sessions),
-  apiKeys: many(apiKeys),
   alerts: many(alerts),
 }));
 
@@ -377,7 +368,6 @@ export type Role = typeof roles.$inferSelect;
 export type User = typeof users.$inferSelect;
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type Session = typeof sessions.$inferSelect;
-export type ApiKey = typeof apiKeys.$inferSelect;
 export type Dataset = typeof datasets.$inferSelect;
 export type MlModel = typeof mlModels.$inferSelect;
 export type TrainingRun = typeof trainingRuns.$inferSelect;

@@ -11,9 +11,8 @@ export type WsEventType =
   | "training_progress"
   | "network_topology"
   | "risk_update"
-  | "notification"
-  | "lifecycle_error"
-  | "system_health";
+  | "system_health"
+  | "model_activated";
 
 export interface WsMessage {
   type: WsEventType;

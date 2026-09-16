@@ -4,7 +4,10 @@ from __future__ import annotations
 
 from typing import Any
 
-import networkx as nx
+try:
+    import networkx as nx
+except Exception:  # Python 3.14 + older networkx can fail at import
+    nx = None  # type: ignore[assignment]
 
 
 CRITICAL_ASSETS = {"server", "router", "database"}
@@ -18,6 +21,12 @@ class RiskEngine:
         entity_id: str,
         graph_snapshot: dict[str, Any],
     ) -> dict[str, Any]:
+        if nx is None:
+            raise RuntimeError(
+                "networkx is unavailable in this Python environment; "
+                "install a compatible networkx version or use Python 3.11/3.12"
+            )
+
         nodes = graph_snapshot.get("nodes", [])
         edges = graph_snapshot.get("edges", [])
 

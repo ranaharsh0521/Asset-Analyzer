@@ -1,3 +1,7 @@
+/**
+ * TanStack Query defaults for the SOC frontend.
+ * Individual hooks still set their own refetchInterval for live panels.
+ */
 import { QueryClient, QueryFunction } from "@tanstack/react-query";
 
 async function throwIfResNotOk(res: Response) {
@@ -45,10 +49,13 @@ export const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       queryFn: getQueryFn({ on401: "throw" }),
+      // Prefer hook-level refetchInterval; keep modest staleTime to avoid stampedes
       refetchInterval: false,
       refetchOnWindowFocus: false,
-      staleTime: Infinity,
-      retry: false,
+      staleTime: 2_000,
+      gcTime: 5 * 60_000,
+      retry: 1,
+      retryDelay: 800,
     },
     mutations: {
       retry: false,
