@@ -1,8 +1,9 @@
-import { Sidebar } from "@/components/layout/Sidebar";
+/**
+ * Model Performance Hub — live metrics from GET /api/metrics (Phase 5 advanced evaluation).
+ */
+import { useMemo, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
-  Area,
-  AreaChart,
   Bar,
   BarChart,
   CartesianGrid,
@@ -14,20 +15,99 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { Download, Share2, RadioTower } from "lucide-react";
+import { Download, Share2, Maximize2, Minimize2, RadioTower } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
-import { useMetrics, usePredictions, useTrainingRuns } from "@/hooks/useApi";
+import { useMetrics } from "@/hooks/useApi";
+import { EmptyState, ErrorState, PageLoader } from "@/components/states";
+import { api } from "@/lib/api";
+
+const ROC_COLORS = ["#06b6d4", "#f59e0b", "#22c55e", "#a78bfa", "#ef4444", "#eab308"];
+
+function num(v: unknown, digits = 4): string {
+  return typeof v === "number" && !Number.isNaN(v) ? v.toFixed(digits) : "—";
+}
+
+function pct(v: unknown): string {
+  return typeof v === "number" && !Number.isNaN(v) ? `${(v * 100).toFixed(1)}%` : "—";
+}
 
 export default function Evaluation() {
   const { toast } = useToast();
-  const { data: metricsData, isLoading, error, refetch } = useMetrics();
-  const { data: runsData } = useTrainingRuns();
-  const { data: predictionsData } = usePredictions();
-  const metrics = (metricsData as { metrics?: Record<string, number> } | undefined)?.metrics ?? {};
-  const latestRun = runsData?.runs?.[0];
-  const trainingHistory = latestRun?.metrics as { history?: Array<{ epoch: number; train_loss: number; val_accuracy: number }> } | undefined;
-  const predictions = predictionsData?.predictions ?? [];
+  const [expandedChart, setExpandedChart] = useState<"roc" | "pr" | null>(null);
+  const { data: metricsData, isLoading, isError, refetch, isFetching } = useMetrics();
+
+  const raw = metricsData?.metrics as Record<string, unknown> | undefined;
+  const headline = metricsData?.headline ?? {};
+  const m = useMemo(() => {
+    const h = headline as Record<string, unknown>;
+    const r = raw ?? {};
+    return {
+      accuracy: (h.accuracy ?? r.accuracy) as number | undefined,
+      precision: (h.precision ?? r.precision) as number | undefined,
+      recall: (h.recall ?? r.recall) as number | undefined,
+      f1: (h.f1 ?? r.f1) as number | undefined,
+      macro_f1: (h.macro_f1 ?? r.macro_f1 ?? metricsData?.macro?.f1) as number | undefined,
+      roc_auc: (h.roc_auc ?? r.roc_auc) as number | undefined,
+      train_loss: (h.train_loss ?? r.train_loss) as number | undefined,
+      val_loss: (h.val_loss ?? r.val_loss) as number | undefined,
+      best_epoch: (h.best_epoch ?? r.best_epoch) as number | undefined,
+    };
+  }, [headline, raw, metricsData?.macro?.f1]);
+
+  const perClass = metricsData?.per_class ?? (raw?.per_class as Record<string, { precision?: number; recall?: number; f1?: number; support?: number }> | undefined) ?? {};
+  const confusion = metricsData?.confusion_matrix ?? (raw?.confusion_matrix as number[][] | undefined);
+  const classLabels = metricsData?.class_labels ?? (raw?.class_labels as string[] | undefined) ?? [];
+  const classDist = metricsData?.class_distribution ?? (raw?.class_distribution as Array<{ class: string; count: number }> | undefined) ?? [];
+  const rocCurves = metricsData?.roc_curves ?? (raw?.roc_curves as Record<string, Array<{ fpr: number; tpr: number }>> | undefined) ?? {};
+  const prCurves = metricsData?.pr_curves ?? (raw?.pr_curves as Record<string, Array<{ recall: number; precision: number }>> | undefined) ?? {};
+  const learningCurve = metricsData?.learning_curve ?? (raw?.history as Array<Record<string, number>> | undefined) ?? [];
+
+  const rocChartData = useMemo(() => {
+    const names = Object.keys(rocCurves);
+    if (!names.length) return [];
+    const maxLen = Math.max(...names.map((n) => rocCurves[n]?.length ?? 0));
+    return Array.from({ length: maxLen }, (_, i) => {
+      const row: Record<string, number | string> = { idx: i };
+      names.forEach((n) => {
+        const pt = rocCurves[n]?.[i];
+        if (pt) row[n] = pt.tpr;
+      });
+      return row;
+    });
+  }, [rocCurves]);
+
+  const prChartData = useMemo(() => {
+    const names = Object.keys(prCurves);
+    if (!names.length) return [];
+    const maxLen = Math.max(...names.map((n) => prCurves[n]?.length ?? 0));
+    return Array.from({ length: maxLen }, (_, i) => {
+      const row: Record<string, number | string> = { idx: i };
+      names.forEach((n) => {
+        const pt = prCurves[n]?.[i];
+        if (pt) row[n] = pt.precision;
+      });
+      return row;
+    });
+  }, [prCurves]);
+
+  const lossCurve = learningCurve.map((h) => ({
+    epoch: `E${h.epoch ?? "?"}`,
+    train_loss: h.train_loss,
+    val_loss: h.val_loss,
+    val_accuracy: h.val_accuracy,
+    f1: h.f1,
+  }));
+
+  const perClassRows = Object.entries(perClass).map(([cls, vals]) => ({
+    class: cls,
+    precision: vals.precision ?? 0,
+    recall: vals.recall ?? 0,
+    f1: vals.f1 ?? 0,
+    support: vals.support ?? 0,
+  }));
+
+  const hasMetrics = metricsData?.model_loaded || Object.keys(raw ?? {}).length > 0;
 
   const handleShare = () => {
     navigator.clipboard.writeText(window.location.href).then(() => {
@@ -37,242 +117,313 @@ export default function Evaluation() {
     });
   };
 
-  const handleExportPDF = () => {
-    toast({ title: "Exporting PDF...", description: "Opening print dialog. Choose Save as PDF.", duration: 3000 });
-    setTimeout(() => window.print(), 500);
+  const handleExport = async (format: "html" | "csv" | "json") => {
+    try {
+      await api.downloadReport(format);
+      toast({ title: "Export started", description: `${format.toUpperCase()} evaluation report ready.` });
+    } catch (err) {
+      toast({
+        title: "Export failed",
+        description: err instanceof Error ? err.message : "Could not download report",
+        variant: "destructive",
+      });
+    }
   };
 
-  const evalMetrics = {
-    accuracy: metrics.accuracy ?? 0,
-    precision: metrics.precision ?? 0,
-    recall: metrics.recall ?? 0,
-    f1: metrics.f1 ?? 0,
-    auc: metrics.auc ?? 0,
-    earlyDetectionRate: metrics.stage_accuracy ? `${(metrics.stage_accuracy * 100).toFixed(1)}%` : "N/A",
+  const handlePdfExport = async () => {
+    try {
+      await api.downloadReport("pdf");
+      toast({
+        title: "Report downloaded",
+        description: "evaluation-report.html saved. Use the print dialog → Save as PDF if you want a .pdf file.",
+      });
+    } catch (err) {
+      toast({
+        title: "PDF export failed",
+        description: err instanceof Error ? err.message : "Could not download report",
+        variant: "destructive",
+      });
+    }
   };
-
-  const trainingTimeline = (trainingHistory?.history ?? []).slice(-24).map((point) => ({
-    time: `E${point.epoch}`,
-    trainLoss: point.train_loss,
-    confidence: point.val_accuracy,
-    benignRecords: 0,
-    maliciousRecords: 0,
-  }));
-  const predictionTimeline = predictions.slice().reverse().slice(-24).map((prediction) => {
-    const benign = prediction.threatLevel === "low" || prediction.threatLevel === "info";
-    return {
-      time: new Date(prediction.createdAt).toLocaleTimeString("en-US", { hour12: false }),
-      confidence: prediction.confidence,
-      benignRecords: benign ? 1 : 0,
-      maliciousRecords: benign ? 0 : 1,
-    };
-  });
-  const timelineChart = trainingTimeline.length > 0 ? trainingTimeline : predictionTimeline;
-  const rocData: Array<{ fpr: number; tpr: number }> = [];
-  const confusionBins = ((metricsData as { metrics?: { confusion_matrix?: { attack?: number[] } } } | undefined)?.metrics?.confusion_matrix?.attack) ?? [];
-
-
-
-  if (error) {
-    return (
-      <div className="app-shell flex h-screen bg-background text-foreground overflow-hidden">
-        <Sidebar />
-        <main className="app-main flex-1 overflow-auto p-4 md:p-6 space-y-6">
-          <div className="panel-card p-6">
-            <div className="text-destructive font-bold mb-2">Failed to load evaluation metrics</div>
-            <div className="text-sm text-muted-foreground font-mono mb-4">{error instanceof Error ? error.message : String(error)}</div>
-            <Button onClick={() => refetch()} variant="default">Retry</Button>
-          </div>
-        </main>
-      </div>
-    );
-  }
 
   if (isLoading) {
-    return (
-      <div className="flex h-screen items-center justify-center bg-background">
-        <span className="text-sm text-muted-foreground font-mono">Loading evaluation metrics...</span>
-      </div>
-    );
+    return <PageLoader label="Loading model metrics…" />;
   }
 
   return (
-    <div className="app-shell flex h-screen bg-background text-foreground overflow-hidden">
-      <Sidebar />
-      <main className="app-main flex-1 overflow-auto p-4 md:p-6 space-y-6">
+    <main className="app-main flex-1 overflow-auto p-4 md:p-6 space-y-6">
         <div className="page-header flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <div className="page-kicker">Performance Intelligence</div>
             <h1 className="text-3xl font-bold tracking-tight text-white mb-2">Model Performance Hub</h1>
             <p className="text-muted-foreground font-mono text-sm max-w-2xl">
-              Live replay telemetry now feeds the performance window here, so the evaluation cards
-              and live-stream charts update as the new dataset moves through the system.
+              Advanced evaluation from the active TGNN checkpoint — ROC/PR curves, confusion matrix,
+              per-class metrics, and training history. Retrain to refresh curve data.
             </p>
           </div>
-          <div className="flex gap-2">
-            <Button variant="outline" size="sm" className="gap-2" onClick={handleShare}>
-              <Share2 size={14} /> Share Report
+          <div className="flex flex-wrap gap-2">
+            <Button variant="outline" size="sm" className="gap-2" onClick={() => refetch()} disabled={isFetching}>
+              Refresh
             </Button>
-            <Button variant="default" size="sm" className="gap-2 bg-primary text-primary-foreground" onClick={handleExportPDF}>
-              <Download size={14} /> Export PDF
+            <Button variant="outline" size="sm" className="gap-2" onClick={handleShare}>
+              <Share2 size={14} /> Share
+            </Button>
+            <Button variant="outline" size="sm" className="gap-2" onClick={() => handleExport("csv")}>
+              <Download size={14} /> CSV
+            </Button>
+            <Button variant="outline" size="sm" className="gap-2" onClick={() => handleExport("json")}>
+              <Download size={14} /> JSON
+            </Button>
+            <Button variant="default" size="sm" className="gap-2 bg-primary text-primary-foreground" onClick={handlePdfExport}>
+              <Download size={14} /> PDF Report
             </Button>
           </div>
         </div>
 
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-          {Object.entries(evalMetrics).map(([key, value]) => (
-            <Card key={key} className="metric-surface rounded-[1.35rem] border-primary/20">
-              <CardContent className="p-4 flex flex-col items-center justify-center text-center">
-                <span className="text-muted-foreground text-xs uppercase tracking-wider mb-1">{key.replace(/([A-Z])/g, " $1").trim()}</span>
-                <span className="text-2xl font-mono font-bold text-primary">
-                  {typeof value === "number" ? value.toFixed(3) : value}
-                </span>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
+        {isError && (
+          <ErrorState
+            title="Metrics unavailable"
+            message="Could not reach /api/metrics. Ensure the AI service is running and a checkpoint exists."
+            onRetry={() => refetch()}
+          />
+        )}
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <Card className="panel-card">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <RadioTower size={18} className="text-primary" />
-                Live Replay Throughput and Confidence
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="h-[320px]">
-              {timelineChart.length ? (
-                <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={timelineChart}>
-                    <defs>
-                      <linearGradient id="evalRecordsFill" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="hsl(186 95% 55%)" stopOpacity={0.35} />
-                        <stop offset="95%" stopColor="hsl(186 95% 55%)" stopOpacity={0} />
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#333" />
-                    <XAxis dataKey="time" stroke="#666" minTickGap={24} />
-                    <YAxis stroke="#666" />
-                    <Tooltip contentStyle={{ backgroundColor: "#111", borderColor: "#333" }} />
-                    <Legend />
-                    <Area type="monotone" dataKey="trainLoss" stroke="hsl(186 95% 55%)" fill="url(#evalRecordsFill)" strokeWidth={2} name="Training Loss" />
-                    <Line type="monotone" dataKey="confidence" stroke="#22c55e" strokeWidth={2} dot={false} name="Confidence" />
-                  </AreaChart>
-                </ResponsiveContainer>
-              ) : (
-                <div className="h-full flex items-center justify-center text-sm font-mono text-muted-foreground">
-                  Training and prediction time series are not available yet.
-                </div>
-              )}
-            </CardContent>
-          </Card>
+        {!isError && !hasMetrics && (
+          <EmptyState
+            title="No trained metrics yet"
+            message="Train or load a TGNN checkpoint (Phase 2), then refresh this page."
+          />
+        )}
 
-          <Card className="panel-card">
-            <CardHeader>
-              <CardTitle>Live Traffic Class Mix</CardTitle>
-            </CardHeader>
-            <CardContent className="h-[320px]">
-              {timelineChart.length ? (
-                <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={timelineChart}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#333" />
-                    <XAxis dataKey="time" stroke="#666" minTickGap={24} />
-                    <YAxis stroke="#666" />
-                    <Tooltip contentStyle={{ backgroundColor: "#111", borderColor: "#333" }} />
-                    <Legend />
-                    <Line type="monotone" dataKey="benignRecords" stroke="#22c55e" strokeWidth={2} dot={false} name="Benign" />
-                    <Line type="monotone" dataKey="maliciousRecords" stroke="#ef4444" strokeWidth={2} dot={false} name="Malicious" />
-                  </LineChart>
-                </ResponsiveContainer>
-              ) : (
-                <div className="h-full flex items-center justify-center text-sm font-mono text-muted-foreground">
-                  Timeline series not available from backend metrics endpoint.
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </div>
-
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <Card className="panel-card">
-            <CardHeader>
-              <CardTitle>ROC Curve Analysis</CardTitle>
-            </CardHeader>
-            <CardContent className="h-[300px]">
-              {rocData.length ? (
-                <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={rocData}>
-                    <defs>
-                      <linearGradient id="colorTpr" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="hsl(190, 90%, 50%)" stopOpacity={0.3} />
-                        <stop offset="95%" stopColor="hsl(190, 90%, 50%)" stopOpacity={0} />
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#333" />
-                    <XAxis dataKey="fpr" stroke="#666" label={{ value: "False Positive Rate", position: "insideBottom", offset: -5 }} />
-                    <YAxis stroke="#666" label={{ value: "True Positive Rate", angle: -90, position: "insideLeft" }} />
-                    <Tooltip contentStyle={{ backgroundColor: "#111", borderColor: "#333" }} />
-                    <Area type="monotone" dataKey="tpr" stroke="hsl(190, 90%, 50%)" fillOpacity={1} fill="url(#colorTpr)" strokeWidth={2} />
-                  </AreaChart>
-                </ResponsiveContainer>
-              ) : (
-                <div className="h-full flex items-center justify-center text-sm font-mono text-muted-foreground">
-                  ROC points not available from backend metrics endpoint.
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          <Card className="panel-card">
-            <CardHeader>
-              <CardTitle>Baseline Comparison</CardTitle>
-            </CardHeader>
-            <CardContent className="h-[300px]">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={[{ name: "TGNN", accuracy: metrics.accuracy ?? 0, f1: metrics.f1 ?? 0 }]} layout="vertical">
-                  <CartesianGrid strokeDasharray="3 3" stroke="#333" horizontal={false} />
-                  <XAxis type="number" domain={[0, 1]} stroke="#666" />
-                  <YAxis dataKey="name" type="category" width={110} stroke="#999" tick={{ fontSize: 12 }} />
-                  <Tooltip cursor={{ fill: "transparent" }} contentStyle={{ backgroundColor: "#111", borderColor: "#333" }} />
-                  <Legend />
-                  <Bar dataKey="accuracy" fill="#3b82f6" radius={[0, 4, 4, 0]} barSize={20} name="Accuracy" />
-                  <Bar dataKey="f1" fill="#06b6d4" radius={[0, 4, 4, 0]} barSize={20} name="F1 Score" />
-                </BarChart>
-              </ResponsiveContainer>
-            </CardContent>
-          </Card>
-        </div>
-
-        <Card className="panel-card">
-          <CardHeader>
-            <CardTitle>Live Window Confusion Matrix</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-2 gap-4 max-w-lg mx-auto">
-              <div className="space-y-4">
-                <div className="h-24 bg-green-500/20 border border-green-500/50 rounded flex flex-col items-center justify-center">
-                  <span className="text-3xl font-bold text-green-400">{"—"}</span>
-                  <span className="text-xs text-muted-foreground uppercase">True Negatives</span>
-                </div>
-                <div className="h-24 bg-red-500/10 border border-red-500/30 rounded flex flex-col items-center justify-center">
-                  <span className="text-2xl font-bold text-red-300">{"—"}</span>
-                  <span className="text-xs text-muted-foreground uppercase">False Negatives</span>
-                </div>
-              </div>
-              <div className="space-y-4 pt-12">
-                <div className="h-24 bg-yellow-500/10 border border-yellow-500/30 rounded flex flex-col items-center justify-center">
-                  <span className="text-2xl font-bold text-yellow-300">{"—"}</span>
-                  <span className="text-xs text-muted-foreground uppercase">False Positives</span>
-                </div>
-                <div className="h-24 bg-primary/20 border border-primary/50 rounded flex flex-col items-center justify-center">
-                  <span className="text-3xl font-bold text-primary">{"—"}</span>
-                  <span className="text-xs text-muted-foreground uppercase">True Positives</span>
-                </div>
-              </div>
+        {!isError && hasMetrics && (
+          <>
+            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3">
+              {[
+                { key: "Accuracy", value: pct(m.accuracy) },
+                { key: "Precision", value: pct(m.precision) },
+                { key: "Recall", value: pct(m.recall) },
+                { key: "F1", value: pct(m.f1) },
+                { key: "Macro F1", value: pct(m.macro_f1) },
+                { key: "ROC-AUC", value: num(m.roc_auc) },
+                { key: "Train Loss", value: num(m.train_loss) },
+                { key: "Val Loss", value: num(m.val_loss) },
+              ].map((item) => (
+                <Card key={item.key} className="metric-surface rounded-[1.35rem] border-primary/20">
+                  <CardContent className="p-3 flex flex-col items-center text-center">
+                    <span className="text-muted-foreground text-[10px] uppercase tracking-wider mb-1">{item.key}</span>
+                    <span className="text-lg font-mono font-bold text-primary">{item.value}</span>
+                  </CardContent>
+                </Card>
+              ))}
             </div>
-          </CardContent>
-        </Card>
+
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              <Card className="panel-card lg:col-span-1">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <RadioTower size={18} className="text-primary" />
+                    Model Artefacts
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3 text-sm font-mono">
+                  <Row label="Architecture" value={String(metricsData?.architecture ?? "—")} />
+                  <Row label="Dataset" value={String(metricsData?.dataset_id ?? "—")} />
+                  <Row label="Graph strategy" value={String(metricsData?.graph_strategy ?? "—")} />
+                  <Row label="Trained at" value={metricsData?.trained_at ? new Date(metricsData.trained_at).toLocaleString() : "—"} />
+                  <Row label="Best epoch" value={String(m.best_epoch ?? "—")} />
+                  <Row label="Training time" value={metricsData?.training_time_sec != null ? `${metricsData.training_time_sec}s` : "—"} />
+                  <Row label="Inference speed" value={metricsData?.inference_time_ms != null ? `${metricsData.inference_time_ms} ms/snapshot` : "—"} />
+                  <Row label="Model size" value={metricsData?.model_size_mb != null ? `${metricsData.model_size_mb} MB` : "—"} />
+                </CardContent>
+              </Card>
+
+              <Card className="panel-card lg:col-span-2">
+                <CardHeader><CardTitle>Class Distribution (Test Support)</CardTitle></CardHeader>
+                <CardContent className="h-[260px]">
+                  {classDist.length === 0 ? (
+                    <p className="text-sm text-muted-foreground font-mono">Retrain the model to populate class distribution.</p>
+                  ) : (
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={classDist}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#333" />
+                        <XAxis dataKey="class" stroke="#666" tick={{ fontSize: 10 }} angle={-25} textAnchor="end" height={60} />
+                        <YAxis stroke="#666" />
+                        <Tooltip contentStyle={{ backgroundColor: "#111", borderColor: "#333" }} />
+                        <Bar dataKey="count" fill="hsl(190, 90%, 50%)" name="Support" radius={[4, 4, 0, 0]} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <Card className={`panel-card ${expandedChart === "roc" ? "fixed inset-4 z-50 overflow-auto" : ""}`}>
+                <CardHeader className="flex flex-row items-center justify-between">
+                  <CardTitle>ROC Curves (One-vs-Rest)</CardTitle>
+                  {rocChartData.length > 0 && (
+                    <Button size="icon" variant="ghost" onClick={() => setExpandedChart(expandedChart === "roc" ? null : "roc")}>
+                      {expandedChart === "roc" ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
+                    </Button>
+                  )}
+                </CardHeader>
+                <CardContent className={expandedChart === "roc" ? "h-[70vh]" : "h-[280px]"}>
+                  {rocChartData.length === 0 ? (
+                    <p className="text-sm text-muted-foreground font-mono">No ROC curve data — retrain to generate.</p>
+                  ) : (
+                    <ResponsiveContainer width="100%" height="100%">
+                      <LineChart data={rocChartData}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#333" />
+                        <XAxis dataKey="idx" hide />
+                        <YAxis domain={[0, 1]} stroke="#666" />
+                        <Tooltip contentStyle={{ backgroundColor: "#111", borderColor: "#333" }} />
+                        <Legend />
+                        {Object.keys(rocCurves).map((name, i) => (
+                          <Line key={name} type="monotone" dataKey={name} stroke={ROC_COLORS[i % ROC_COLORS.length]} dot={false} strokeWidth={2} />
+                        ))}
+                      </LineChart>
+                    </ResponsiveContainer>
+                  )}
+                </CardContent>
+              </Card>
+
+              <Card className={`panel-card ${expandedChart === "pr" ? "fixed inset-4 z-50 overflow-auto" : ""}`}>
+                <CardHeader className="flex flex-row items-center justify-between">
+                  <CardTitle>Precision–Recall Curves</CardTitle>
+                  {prChartData.length > 0 && (
+                    <Button size="icon" variant="ghost" onClick={() => setExpandedChart(expandedChart === "pr" ? null : "pr")}>
+                      {expandedChart === "pr" ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
+                    </Button>
+                  )}
+                </CardHeader>
+                <CardContent className={expandedChart === "pr" ? "h-[70vh]" : "h-[280px]"}>
+                  {prChartData.length === 0 ? (
+                    <p className="text-sm text-muted-foreground font-mono">No PR curve data — retrain to generate.</p>
+                  ) : (
+                    <ResponsiveContainer width="100%" height="100%">
+                      <LineChart data={prChartData}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#333" />
+                        <XAxis dataKey="idx" hide />
+                        <YAxis domain={[0, 1]} stroke="#666" />
+                        <Tooltip contentStyle={{ backgroundColor: "#111", borderColor: "#333" }} />
+                        <Legend />
+                        {Object.keys(prCurves).map((name, i) => (
+                          <Line key={name} type="monotone" dataKey={name} stroke={ROC_COLORS[i % ROC_COLORS.length]} dot={false} strokeWidth={2} />
+                        ))}
+                      </LineChart>
+                    </ResponsiveContainer>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <Card className="panel-card">
+                <CardHeader><CardTitle>Loss &amp; Accuracy Curves</CardTitle></CardHeader>
+                <CardContent className="h-[280px]">
+                  {lossCurve.length === 0 ? (
+                    <p className="text-sm text-muted-foreground font-mono">No training history recorded.</p>
+                  ) : (
+                    <ResponsiveContainer width="100%" height="100%">
+                      <LineChart data={lossCurve}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#333" />
+                        <XAxis dataKey="epoch" stroke="#666" />
+                        <YAxis stroke="#666" />
+                        <Tooltip contentStyle={{ backgroundColor: "#111", borderColor: "#333" }} />
+                        <Legend />
+                        <Line type="monotone" dataKey="train_loss" stroke="#ef4444" dot={false} name="Train Loss" />
+                        <Line type="monotone" dataKey="val_loss" stroke="#f59e0b" dot={false} name="Val Loss" />
+                        <Line type="monotone" dataKey="val_accuracy" stroke="#22c55e" dot={false} name="Val Accuracy" />
+                        <Line type="monotone" dataKey="f1" stroke="#06b6d4" dot={false} name="F1" />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  )}
+                </CardContent>
+              </Card>
+
+              <Card className="panel-card">
+                <CardHeader><CardTitle>Per-Class Metrics</CardTitle></CardHeader>
+                <CardContent className="h-[280px] overflow-auto">
+                  {perClassRows.length === 0 ? (
+                    <p className="text-sm text-muted-foreground font-mono">No per-class breakdown available.</p>
+                  ) : (
+                    <table className="w-full text-xs font-mono">
+                      <thead>
+                        <tr className="text-muted-foreground border-b border-border">
+                          <th className="text-left py-2">Class</th>
+                          <th className="text-right py-2">Prec</th>
+                          <th className="text-right py-2">Rec</th>
+                          <th className="text-right py-2">F1</th>
+                          <th className="text-right py-2">N</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {perClassRows.map((row) => (
+                          <tr key={row.class} className="border-b border-border/40">
+                            <td className="py-1.5">{row.class}</td>
+                            <td className="text-right">{pct(row.precision)}</td>
+                            <td className="text-right">{pct(row.recall)}</td>
+                            <td className="text-right">{pct(row.f1)}</td>
+                            <td className="text-right">{row.support}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+
+            {confusion && confusion.length > 0 && (
+              <Card className="panel-card">
+                <CardHeader><CardTitle>Confusion Matrix</CardTitle></CardHeader>
+                <CardContent className="overflow-x-auto">
+                  <table className="text-xs font-mono mx-auto">
+                    <thead>
+                      <tr>
+                        <th className="p-2 text-muted-foreground">Actual ↓ / Pred →</th>
+                        {(classLabels.length ? classLabels : confusion.map((_, i) => String(i))).map((l) => (
+                          <th key={l} className="p-2 text-cyan-300 font-normal">{l}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {confusion.map((row, i) => {
+                        const label = classLabels[i] ?? String(i);
+                        const maxVal = Math.max(...row, 1);
+                        return (
+                          <tr key={label}>
+                            <th className="p-2 text-left text-muted-foreground font-normal">{label}</th>
+                            {row.map((cell, j) => (
+                              <td
+                                key={j}
+                                className="p-2 text-center rounded"
+                                style={{
+                                  backgroundColor: `rgba(6, 182, 212, ${0.08 + (cell / maxVal) * 0.45})`,
+                                }}
+                              >
+                                {cell}
+                              </td>
+                            ))}
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </CardContent>
+              </Card>
+            )}
+          </>
+        )}
       </main>
+  );
+}
+
+function Row({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-center justify-between gap-3 border-b border-border/40 pb-2">
+      <span className="text-muted-foreground">{label}</span>
+      <span className="text-foreground">{value}</span>
     </div>
   );
 }

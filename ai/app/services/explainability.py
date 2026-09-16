@@ -7,6 +7,11 @@ from typing import Any
 import numpy as np
 import torch
 
+from app.graph.builder import (
+    NODE_FEATURE_DIM,
+    endpoint_feature_name,
+    is_reserved_endpoint_dim,
+)
 from app.services.inference import inference_service
 
 
@@ -46,6 +51,15 @@ class ExplainabilityService:
         reasoning = self._generate_reasoning(
             target_node, node_importance, edge_importance, attack_probs, stage_probs,
         )
+        reasoning_tree = self._build_reasoning_tree(
+            target_node, node_importance, edge_importance, attack_probs, stage_probs,
+            integrated_grads,
+        )
+        graph_heatmap = self._build_graph_heatmap(
+            graph_snapshot.get("nodes", []),
+            node_importance,
+            edge_importance,
+        )
 
         return {
             "node_id": node_id,
@@ -56,6 +70,8 @@ class ExplainabilityService:
             "integrated_gradients": integrated_grads,
             "shap_values": self._approximate_shap(x, edge_index),
             "reasoning": reasoning,
+            "reasoning_tree": reasoning_tree,
+            "graph_heatmap": graph_heatmap,
             "attack_probabilities": {
                 str(i): round(float(p), 4) for i, p in enumerate(attack_probs)
             },
@@ -112,19 +128,22 @@ class ExplainabilityService:
 
         avg_grads = torch.stack(grads).mean(dim=0)
         ig = (x - baseline) * avg_grads
-        ig_np = ig.squeeze().cpu().numpy()
-
-        feature_names = [
-            "packets", "bytes", "connections", "failed_logins", "ports",
-            "node_type", "avg_bytes", "conn_ratio", "f8", "f9",
-            "f10", "f11", "f12", "f13", "f14", "f15",
-        ]
+        ig_np = np.atleast_2d(ig.detach().cpu().numpy())
+        if ig_np.ndim > 2:
+            ig_np = ig_np.reshape(ig_np.shape[0], -1)
+        # Aggregate per-feature attribution across nodes (target row when single-node).
+        row = ig_np[target_idx] if 0 <= target_idx < ig_np.shape[0] else ig_np.mean(axis=0)
+        if row.ndim > 1:
+            row = row.reshape(-1)
 
         result = []
-        for i, val in enumerate(ig_np[:len(feature_names)]):
+        for i, val in enumerate(row[:NODE_FEATURE_DIM]):
+            if is_reserved_endpoint_dim(i):
+                continue
             result.append({
-                "feature": feature_names[i],
+                "feature": endpoint_feature_name(i),
                 "importance": round(float(val), 4),
+                "index": i,
                 "method": "integrated_gradients",
             })
         result.sort(key=lambda x: abs(x["importance"]), reverse=True)
@@ -144,20 +163,21 @@ class ExplainabilityService:
             base_score = base_out["risk_score"].item()
 
         shap_values = []
-        feature_names = [
-            "packets", "bytes", "connections", "failed_logins", "ports",
-            "node_type", "avg_bytes", "conn_ratio",
+        active_dims = [
+            i for i in range(min(NODE_FEATURE_DIM, int(x.size(-1))))
+            if not is_reserved_endpoint_dim(i)
         ]
 
-        for i in range(min(8, x.size(-1))):
+        for i in active_dims:
             perturbed = x.clone()
-            perturbed[0, i] = 0
+            perturbed[:, i] = 0
             with torch.no_grad():
                 out = inference_service.model(perturbed, edge_index)
                 delta = base_score - out["risk_score"].item()
             shap_values.append({
-                "feature": feature_names[i] if i < len(feature_names) else f"feature_{i}",
+                "feature": endpoint_feature_name(i),
                 "shap_value": round(float(delta), 4),
+                "index": i,
                 "method": "shap_approximation",
             })
 
@@ -226,6 +246,141 @@ class ExplainabilityService:
             )
 
         return " ".join(parts)
+
+    def _build_reasoning_tree(
+        self,
+        target_node: dict | None,
+        node_importance: list[dict],
+        edge_importance: list[dict],
+        attack_probs: np.ndarray,
+        stage_probs: np.ndarray,
+        integrated_grads: list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
+        """Structured decision tree for the Explainability UI."""
+        attack_idx = int(np.argmax(attack_probs))
+        stage_idx = int(np.argmax(stage_probs))
+        top_features = integrated_grads[:3] if integrated_grads else []
+
+        root = {
+            "id": "root",
+            "label": "TGNN risk assessment",
+            "detail": f"Attack confidence {attack_probs[attack_idx] * 100:.1f}%",
+            "children": [
+                {
+                    "id": "attack",
+                    "label": f"Predicted attack class #{attack_idx}",
+                    "detail": f"Probability {attack_probs[attack_idx] * 100:.1f}%",
+                    "children": [],
+                },
+                {
+                    "id": "stage",
+                    "label": f"Kill-chain stage #{stage_idx}",
+                    "detail": f"Stage probability {stage_probs[stage_idx] * 100:.1f}%",
+                    "children": [],
+                },
+            ],
+        }
+
+        if target_node:
+            root["children"].append({
+                "id": "target",
+                "label": f"Target {target_node.get('ip', target_node.get('id', 'node'))}",
+                "detail": (
+                    f"{target_node.get('packets', 0)} packets · "
+                    f"{target_node.get('connections', 0)} connections"
+                ),
+                "children": [],
+            })
+
+        if top_features:
+            root["children"].append({
+                "id": "features",
+                "label": "Top integrated-gradient features",
+                "detail": ", ".join(f["feature"] for f in top_features),
+                "children": [
+                    {
+                        "id": f"feat-{i}",
+                        "label": f["feature"],
+                        "detail": f"IG score {f['importance']:.4f}",
+                        "children": [],
+                    }
+                    for i, f in enumerate(top_features)
+                ],
+            })
+
+        if node_importance:
+            top = node_importance[0]
+            root["children"].append({
+                "id": "attention",
+                "label": "GAT attention focus",
+                "detail": f"Node index {top.get('node_index')} · score {top.get('importance', 0):.3f}",
+                "children": [
+                    {
+                        "id": f"node-{n.get('node_index', i)}",
+                        "label": n.get("label") or n.get("ip") or f"Node {n.get('node_index', i)}",
+                        "detail": f"Importance {n.get('importance', 0):.3f}",
+                        "children": [],
+                    }
+                    for i, n in enumerate(node_importance[:3])
+                ],
+            })
+
+        if edge_importance:
+            e = edge_importance[0]
+            root["children"].append({
+                "id": "edge",
+                "label": "Critical communication edge",
+                "detail": (
+                    f"{e.get('source', '?')} → {e.get('target', '?')} "
+                    f"({e.get('protocol', 'unknown')})"
+                ),
+                "children": [],
+            })
+
+        return [root]
+
+    def _build_graph_heatmap(
+        self,
+        nodes: list[dict],
+        node_importance: list[dict],
+        edge_importance: list[dict],
+    ) -> dict[str, Any]:
+        """Node/edge intensity map for graph overlay visualization."""
+        score_by_idx = {
+            int(n.get("node_index", i)): float(n.get("importance", 0))
+            for i, n in enumerate(node_importance)
+        }
+        max_node = max(score_by_idx.values(), default=1.0) or 1.0
+
+        heat_nodes = []
+        for i, node in enumerate(nodes[:80]):
+            raw = score_by_idx.get(i, 0.0)
+            heat_nodes.append({
+                "id": node.get("id") or node.get("ip") or f"node-{i}",
+                "ip": node.get("ip"),
+                "label": node.get("label") or node.get("ip") or f"Node {i}",
+                "importance": round(raw, 4),
+                "intensity": round(min(1.0, raw / max_node), 4),
+            })
+
+        max_edge = max((e.get("importance", 0) for e in edge_importance), default=1.0) or 1.0
+        heat_edges = [
+            {
+                "source": e.get("source"),
+                "target": e.get("target"),
+                "protocol": e.get("protocol"),
+                "importance": e.get("importance", 0),
+                "intensity": round(min(1.0, float(e.get("importance", 0)) / max_edge), 4),
+            }
+            for e in edge_importance[:30]
+        ]
+
+        return {
+            "nodes": heat_nodes,
+            "edges": heat_edges,
+            "max_node_importance": round(max_node, 4),
+            "max_edge_importance": round(max_edge, 4),
+        }
 
 
 explainability_service = ExplainabilityService()

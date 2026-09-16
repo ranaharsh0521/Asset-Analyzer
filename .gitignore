@@ -10,3 +10,9 @@ __pycache__/
 .venv/
 venv/
 .local/
+data/
+ai/models/*.pt
+ai/models/*.pth
+DataSet/
+uploads/
+attached_assets/

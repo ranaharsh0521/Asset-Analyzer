@@ -3,9 +3,11 @@ import {
   Activity,
   AlertTriangle,
   BarChart3,
+  Boxes,
   Brain,
   ChevronsLeft,
   FileText,
+  FlaskConical,
   LayoutDashboard,
   Menu,
   Network,
@@ -14,44 +16,83 @@ import {
   X,
   Zap,
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 import { useIsMobile } from "@/hooks/use-mobile";
+
+const SIDEBAR_SCROLL_KEY = "aa:sidebar-nav-scroll";
+
+/** Backup scroll memory if Sidebar ever remounts (primary fix: AppShell keeps it mounted). */
+let sidebarNavScrollY = 0;
+
+function readSidebarScroll(): number {
+  if (sidebarNavScrollY > 0) return sidebarNavScrollY;
+  try {
+    const raw = sessionStorage.getItem(SIDEBAR_SCROLL_KEY);
+    const n = raw ? Number(raw) : 0;
+    return Number.isFinite(n) && n > 0 ? n : 0;
+  } catch {
+    return 0;
+  }
+}
+
+function writeSidebarScroll(y: number) {
+  const next = Math.max(0, Math.round(y));
+  sidebarNavScrollY = next;
+  try {
+    sessionStorage.setItem(SIDEBAR_SCROLL_KEY, String(next));
+  } catch {
+    // ignore
+  }
+}
+
+const SIDEBAR_SECTIONS: Array<{
+  title: string;
+  items: Array<{
+    href: string;
+    label: string;
+    icon: typeof LayoutDashboard;
+    hint: string;
+  }>;
+}> = [
+  {
+    title: "Command",
+    items: [
+      { href: "/", label: "Overview", icon: LayoutDashboard, hint: "Network health & SOC pulse" },
+      { href: "/network", label: "Network Graph", icon: Network, hint: "Dynamic timestamp graph" },
+      { href: "/suspects", label: "Potential Suspects", icon: AlertTriangle, hint: "Suspicious devices" },
+      { href: "/alerts", label: "Threat Detection", icon: Shield, hint: "Incidents and alerts" },
+      { href: "/network-scanner", label: "Devices", icon: ScanSearch, hint: "Hosts, IoT & inventory" },
+    ],
+  },
+  {
+    title: "Insights",
+    items: [
+      { href: "/attack-intelligence", label: "Threat Journey", icon: Zap, hint: "Attack progression storyline" },
+      { href: "/explainability", label: "AI Explainability", icon: Brain, hint: "Model reasoning layers" },
+      { href: "/risk-assessment", label: "Risk Radar", icon: Activity, hint: "Exposure at a glance" },
+      { href: "/evaluation", label: "Analytics", icon: BarChart3, hint: "Model & traffic metrics" },
+    ],
+  },
+  {
+    title: "Research",
+    items: [
+      { href: "/experiment", label: "Model Studio", icon: Network, hint: "Training and tuning" },
+      { href: "/models", label: "Model Registry", icon: Boxes, hint: "Checkpoints and versions" },
+      { href: "/research", label: "Research Lab", icon: FlaskConical, hint: "Continual learning & drift" },
+      { href: "/advanced-eval", label: "Deep Metrics", icon: Activity, hint: "Extended analytics" },
+      { href: "/admin", label: "Admin Panel", icon: Activity, hint: "System management" },
+      { href: "/files", label: "Project Atlas", icon: FileText, hint: "Files and architecture" },
+    ],
+  },
+];
 
 export function Sidebar() {
   const [location] = useLocation();
   const isMobile = useIsMobile();
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
-
-  const sections = [
-    {
-      title: "Command",
-      items: [
-        { href: "/", label: "Mission Control", icon: LayoutDashboard, hint: "Live security pulse" },
-        { href: "/experiment", label: "Model Studio", icon: Network, hint: "Training and tuning" },
-      ],
-    },
-    {
-      title: "Insights",
-      items: [
-        { href: "/attack-intelligence", label: "Threat Journey", icon: Zap, hint: "Attack progression storyline" },
-        { href: "/explainability", label: "AI Explainability", icon: Brain, hint: "Model reasoning layers" },
-        { href: "/risk-assessment", label: "Risk Radar", icon: AlertTriangle, hint: "Exposure at a glance" },
-        { href: "/evaluation", label: "Performance Hub", icon: Activity, hint: "Core detection signals" },
-        { href: "/advanced-eval", label: "Deep Metrics", icon: BarChart3, hint: "Extended analytics" },
-      ],
-    },
-    {
-      title: "Explore",
-      items: [
-        { href: "/network-scanner", label: "Network Lens", icon: ScanSearch, hint: "Topology and live scans" },
-        { href: "/alerts", label: "Alert Center", icon: Shield, hint: "Incidents and response" },
-        { href: "/admin", label: "Admin Panel", icon: Activity, hint: "System management" },
-        { href: "/files", label: "Project Atlas", icon: FileText, hint: "Files and architecture" },
-      ],
-    },
-  ];
+  const navRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
     setMobileOpen(false);
@@ -65,9 +106,41 @@ export function Sidebar() {
     }
   }, [isMobile]);
 
+  // Preserve COMMAND / Insights / Research nav scroll across navigations.
+  // AppShell keeps Sidebar mounted; this is a backup if remount still happens.
+  useLayoutEffect(() => {
+    const el = navRef.current;
+    if (!el) return;
+    const saved = readSidebarScroll();
+    if (saved > 0 && Math.abs(el.scrollTop - saved) > 1) {
+      el.scrollTop = saved;
+    }
+  }, [location, collapsed, isMobile]);
+
+  useEffect(() => {
+    const el = navRef.current;
+    if (!el) return;
+
+    const onScroll = () => writeSidebarScroll(el.scrollTop);
+    el.addEventListener("scroll", onScroll, { passive: true });
+
+    // Restore once more after paint (fonts / layout settle).
+    const saved = readSidebarScroll();
+    if (saved > 0) {
+      requestAnimationFrame(() => {
+        if (navRef.current) navRef.current.scrollTop = saved;
+      });
+    }
+
+    return () => {
+      writeSidebarScroll(el.scrollTop);
+      el.removeEventListener("scroll", onScroll);
+    };
+  }, [collapsed, isMobile]);
+
   const allItems = useMemo(
-    () => sections.flatMap((section) => section.items),
-    [sections],
+    () => SIDEBAR_SECTIONS.flatMap((section) => section.items),
+    [],
   );
   const currentItem = allItems.find((item) => item.href === location) ?? allItems[0];
   const isCompact = !isMobile && collapsed;
@@ -151,8 +224,15 @@ export function Sidebar() {
           )}
         </div>
 
-        <nav className={cn("flex-1 overflow-y-auto", isCompact ? "px-2 py-4" : "px-3 py-5")}>
-          {sections.map((section) => (
+        <nav
+          ref={navRef}
+          data-sidebar-nav="true"
+          className={cn(
+            "flex-1 overflow-y-auto overscroll-contain [overflow-anchor:none]",
+            isCompact ? "px-2 py-4" : "px-3 py-5",
+          )}
+        >
+          {SIDEBAR_SECTIONS.map((section) => (
             <div key={section.title} className="mb-5 last:mb-0">
               {!isCompact && (
                 <div className="mb-2 px-3 text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground/80">

@@ -44,7 +44,9 @@ export async function seedDatabase() {
   const datasetSources = [
     { name: "UNSW-NB15", source: "unsw_nb15", fileType: "csv" },
     { name: "CICIDS2017", source: "cicids2017", fileType: "csv" },
+    { name: "CSE-CIC-IDS2018", source: "cse_cic_ids2018", fileType: "csv" },
     { name: "TON-IoT", source: "ton_iot", fileType: "csv" },
+    { name: "NSL-KDD", source: "nsl_kdd", fileType: "csv" },
   ];
 
   for (const ds of datasetSources) {
@@ -64,8 +66,14 @@ export async function seedDatabase() {
   console.log("[seed] Database initialization complete");
 }
 
-if (import.meta.url === `file://${process.argv[1]?.replace(/\\/g, "/")}` ||
-    process.argv[1]?.endsWith("seed.ts")) {
+/** True when this file is executed directly (e.g. `npm run db:seed` / `tsx server/seed.ts`). */
+function isSeedCliEntry(): boolean {
+  const entry = process.argv[1];
+  if (!entry) return false;
+  return /(?:^|[/\\])seed\.(ts|js|mts|cts|cjs|mjs)$/i.test(entry);
+}
+
+if (isSeedCliEntry()) {
   seedDatabase()
     .then(() => process.exit(0))
     .catch((err) => {

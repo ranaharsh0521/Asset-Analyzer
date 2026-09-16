@@ -9,6 +9,7 @@ export function getRedis(): Redis {
       maxRetriesPerRequest: 3,
       lazyConnect: true,
     });
+    redis.on("error", () => {});
   }
   return redis;
 }

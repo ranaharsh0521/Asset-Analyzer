@@ -9,9 +9,21 @@ import { nanoid } from "nanoid";
 const viteLogger = createLogger();
 
 export async function setupVite(server: Server, app: Express) {
+  // The app already attaches `ws` to this HTTP server for `/ws`. Sharing that
+  // same server for Vite HMR causes upgrade conflicts (browser: "WebSocket
+  // closed without opened" / HTTP 400 on `/vite-hmr`). Run HMR on a dedicated
+  // port instead, and point the client at it explicitly.
+  //
+  // Do not use Vite's default 5173 — nothing listens there in this setup
+  // (Express+Vite middleware is on PORT, usually 5000).
+  const hmrPort = parseInt(process.env.VITE_HMR_PORT || "24678", 10);
   const serverOptions = {
     middlewareMode: true,
-    hmr: { server, path: "/vite-hmr" },
+    hmr: {
+      path: "/vite-hmr",
+      port: hmrPort,
+      clientPort: hmrPort,
+    },
     allowedHosts: true as const,
   };
 
@@ -28,6 +40,10 @@ export async function setupVite(server: Server, app: Express) {
     server: serverOptions,
     appType: "custom",
   });
+
+  // `server` is the Express HTTP server (used by callers for middleware mode).
+  // HMR intentionally does not attach to it — see hmr.port above.
+  void server;
 
   app.use(vite.middlewares);
 
