@@ -13,6 +13,7 @@ venv/
 data/
 ai/models/*.pt
 ai/models/*.pth
-DataSet/
+DataSet/**
+!DataSet/README.md
 uploads/
 attached_assets/

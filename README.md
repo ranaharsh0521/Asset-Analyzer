@@ -1,5 +1,7 @@
 # AI-Driven Cyber Attack Prediction using Temporal Graph Neural Networks (TGNN)
 
+AI-Driven Cyber Attack Prediction System.
+
 Production-oriented Security Operations Center (SOC) platform that trains a Temporal Graph Neural Network on real network intrusion datasets, serves live inference through FastAPI, persists results in PostgreSQL via Express, and visualizes threats in a React dashboard with WebSocket updates.
 
 ## Highlights
@@ -66,6 +68,8 @@ Login (seeded admin; not shown on the login UI): `admin@gnn-ids.local` / `Admin@
 | [PPT_CONTENT.md](./PPT_CONTENT.md) | Presentation outline |
 | [FINAL_REPORT.md](./FINAL_REPORT.md) | Academic report |
 | [FINAL_PROJECT_SUMMARY.md](./FINAL_PROJECT_SUMMARY.md) | End-to-end summary |
+| [DataSet/README.md](./DataSet/README.md) | Where to place CICIDS2017 CSVs |
+| [ai/models/README.md](./ai/models/README.md) | Checkpoint files not stored in git |
 
 ## Default ports
 
@@ -76,6 +80,16 @@ Login (seeded admin; not shown on the login UI): `admin@gnn-ids.local` / `Admin@
 | PostgreSQL | 5432 |
 | Redis | 6379 (optional) |
 
+## Team
+
+This repository is maintained by:
+
+- [ranaharsh0521](https://github.com/ranaharsh0521)
+- [Harsh-depot](https://github.com/Harsh-depot)
+- [digs2610](https://github.com/digs2610)
+
+Upstream academic source for the current tree: [Suchit-Parmar/Asset-Analyzer-main](https://github.com/Suchit-Parmar/Asset-Analyzer-main).
+
 ## License
 
-Academic / project use — 7th semester Asset Analyzer project.
+MIT — see [LICENSE](./LICENSE). Academic / project use for the 7th semester Asset Analyzer project.
