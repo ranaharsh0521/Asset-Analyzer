@@ -13,7 +13,7 @@
     "db:push": "drizzle-kit push",
     "db:seed": "tsx server/seed.ts",
     "db:sync": "tsx server/sync-network.ts",
-    "test": "tsx --test server/**/*.test.ts",
+    "test": "tsx --test server/auth.test.ts server/live-sync.test.ts",
     "docker:up": "docker compose up -d",
     "docker:down": "docker compose down"
   },

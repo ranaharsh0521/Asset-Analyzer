@@ -1,118 +1,56 @@
 # Asset Analyzer - Copilot Instructions
 
 ## Project Overview
-Asset Analyzer is a **Temporal Graph Neural Network (TGNN) security research prototype** for intrusion detection and attack stage prediction. It features a full-stack TypeScript application with a React + Tailwind frontend for dashboards (Dashboard, Experiment Lab, Attack Intelligence, Explainability, Risk Assessment, Evaluation, Advanced Metrics) and an Express.js backend with PostgreSQL database.
 
-## Architecture & Critical Patterns
+Asset Analyzer is a production-oriented **Temporal Graph Neural Network (TGNN)** SOC prototype for intrusion detection and attack-stage prediction. It trains on real network-intrusion datasets (CICIDS2017 and related sets), serves inference from FastAPI, persists results in PostgreSQL via Express, and visualizes threats in a React dashboard with WebSocket updates.
 
-### Monorepo Structure
-- **`client/`**: React frontend (Vite build, client-side routing via Wouter)
-- **`server/`**: Express.js backend with request logging middleware
-- **`shared/`**: Drizzle ORM schema and Zod validators (used by both client/server)
-- **`script/`**: Build orchestration (esbuild for server, Vite for client)
+## Architecture
 
-### Data Flow
-1. Frontend pages render dashboards using mock data (`client/src/lib/advancedMockData.ts`, `mockData.ts`)
-2. Routes defined in `App.tsx` → `client/src/pages/` (8 page components)
-3. Backend routes added in `server/routes.ts` (prefix `/api` for all routes)
-4. Database schema in `shared/schema.ts` uses Drizzle ORM with PostgreSQL
-
-### Build & Dev Workflow
-- **Development**: Parallel processes via `npm run dev` (server) and `npm run dev:client` (Vite on port 5000)
-- **Production Build**: `npm run build` runs esbuild for server with allowlist bundling (reduces cold start) + Vite for client → `dist/public/`
-- **Start**: `npm start` runs bundled `dist/index.cjs` with `NODE_ENV=production`
-- **Type Check**: `npm run check` (tsc strict mode)
-- **DB**: `npm run db:push` syncs schema to PostgreSQL via Drizzle
-
-### Path Aliases (tsconfig.json)
-- `@/*` → `client/src/*`
-- `@shared/*` → `shared/*`
-- `@assets/*` → `attached_assets/*` (research documents)
-
-## Component & Code Patterns
-
-### React Components (Functional + Hooks)
-- **Layout**: `Sidebar` uses Wouter for navigation with collapsible state
-- **UI Components**: Radix UI + Tailwind (large shadcn-style UI component library in `client/src/components/ui/`)
-- **Visualizations**: Custom `NetworkGraph.tsx` (HTML5 Canvas/Recharts) in `client/src/components/viz/`
-- **Utils**: `cn()` utility (clsx + tailwind-merge) in `lib/utils.ts`
-- **State Management**: React Query (`@tanstack/react-query`) via `lib/queryClient.ts`
-
-### Dashboard Pattern (each page in `client/src/pages/`)
-```tsx
-// Sidebar + main content wrapper with CardHeader/CardTitle structure
-import { Sidebar } from "@/components/layout/Sidebar";
-import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
-// Stats state + useEffect intervals for simulated updates
-const [stats, setStats] = useState({...});
-useEffect(() => setInterval(...), []);
+```
+React (Vite)  →  Express API + WS  →  PostgreSQL / Redis
+                      ↓
+               FastAPI + PyTorch TGNN
+                      ↓
+               ai/models/*.pt
 ```
 
-### Server Route Pattern
-```typescript
-// server/routes.ts
-export async function registerRoutes(httpServer, app) {
-  // Routes with /api prefix
-  // Use storage API for CRUD: storage.insertUser(), storage.getUserByUsername()
-}
-```
+### Monorepo layout
 
-### Database Schema
-- Drizzle ORM in `shared/schema.ts` with Zod integration (`createInsertSchema`)
-- Example: `users` table with UUID PK, unique username, password
-- `db:push` command syncs to PostgreSQL
+- `client/` — React + Vite UI (Wouter routing, Tailwind, Radix/shadcn)
+- `server/` — Express API, JWT/RBAC, PostgreSQL (Drizzle), WebSocket
+- `ai/` — FastAPI TGNN service (training, inference, live capture, explainability)
+- `shared/` — Drizzle schema + Zod types shared by client/server
+- `script/` — Production build (esbuild server + Vite client)
 
-## Critical Development Commands
+Dashboards talk to **real APIs** (`client/src/lib/api.ts`, `hooks/useApi.ts`). Do not reintroduce mock prediction pipelines.
+
+## Key flows
+
+1. Login (`POST /api/auth/login`) issues JWT; seeded admin is `admin@gnn-ids.local` / `Admin@123456`.
+2. Express proxies/persists AI results (`server/routes/api.routes.ts`, `server/ai-client.ts`).
+3. FastAPI loads checkpoints from `MODEL_DIR` (default `ai/models`) in `ai/app/services/inference.py`.
+4. Live detection: Network Graph → LIVE → pick NIC → Start (`ai/app/live/`).
+5. WebSocket `/ws` pushes alerts and predictions (`server/websocket.ts`, `hooks/useWebSocketSync.ts`).
+
+## Commands
+
 | Command | Purpose |
 |---------|---------|
-| `npm run dev` | Start Express server (localhost, auto-reload via tsx watch) |
-| `npm run dev:client` | Start Vite dev server (port 5000, HMR enabled) |
-| `npm run build` | Bundle both client (Vite) and server (esbuild, CJS) |
-| `npm start` | Run production build (`dist/index.cjs`) |
-| `npm run check` | TypeScript strict mode validation |
-| `npm run db:push` | Sync Drizzle schema to PostgreSQL (requires DATABASE_URL) |
+| `npm install` | Install Node dependencies |
+| `npm run db:push` | Sync Drizzle schema to PostgreSQL |
+| `npm run db:seed` | Seed admin user |
+| `npm run dev` | Express + Vite (port 5000) |
+| `npm run dev:ai` | FastAPI on port 8000 |
+| `npm test` | Node tests (`server/**/*.test.ts`) |
+| `npm run check` | TypeScript check |
+| `npm run build` | Production bundle |
 
-## Key Dependencies
-- **Frontend**: React, Vite, Tailwind, Radix UI, Wouter (routing), React Query, chart libraries (Recharts, HTML5 Canvas)
-- **Backend**: Express, Drizzle ORM, Zod validation, PostgreSQL driver (`pg`)
-- **Build**: esbuild, tsx (TypeScript executor)
-- **Visualization**: Lucide Icons, custom Canvas components
+Python (from `ai/`): `pip install -r requirements.txt` then `python -m uvicorn app.main:app --host 127.0.0.1 --port 8000`.
 
-## Conventions & Special Notes
-1. **Synthetic Data**: Mock data drives dashboards (no live ML inference yet); use `mockData.ts` for examples
-2. **Networking**: Server logs all `/api` routes with method, status, duration, response
-3. **Environment**: `NODE_ENV` controls Vite dev vs production + Replit-specific plugins
-4. **Error Handling**: Express middleware at end of route registration captures errors, returns JSON with `message` field
-5. **Assets**: `attached_assets/` holds research prompts/context (ML engineer, SOC analyst personas)
+## Conventions
 
-## When Adding Features
-- **New Page**: Create in `client/src/pages/`, add route in `App.tsx` router, link in `Sidebar`
-- **New API Route**: Add in `server/routes.ts` with `/api` prefix, log via middleware
-- **New Database Entity**: Add to `shared/schema.ts`, run `npm run db:push`, create Zod schema with `createInsertSchema()`
-- **New UI Component**: Use existing Radix + Tailwind patterns in `client/src/components/ui/`
-
-## File Structure Quick Reference
-```
-Asset-Analyzer/
-├── client/src/
-│   ├── pages/          # 8 research dashboards
-│   ├── components/
-│   │   ├── layout/     # Sidebar, layout wrappers
-│   │   ├── ui/         # Radix + Tailwind components
-│   │   └── viz/        # Custom visualizations (NetworkGraph, etc)
-│   ├── lib/
-│   │   ├── mockData.ts      # Synthetic training logs
-│   │   ├── advancedMockData.ts # Attack stage predictions
-│   │   └── utils.ts         # cn() utility
-│   ├── App.tsx         # Router definition
-│   └── main.tsx        # React render entry
-├── server/
-│   ├── index.ts        # Express app, middleware
-│   ├── routes.ts       # /api endpoints (add routes here)
-│   └── storage.ts      # DB abstraction layer
-├── shared/
-│   └── schema.ts       # Drizzle ORM schema + Zod validators
-├── script/
-│   └── build.ts        # esbuild + Vite orchestration
-└── vite.config.ts      # Vite + Tailwind + path aliases
-```
+- Keep live capture **authorized local interfaces only**; never invent a fake `any` NIC.
+- Do not fabricate accuracy metrics or topology nodes when the graph is empty.
+- Node features are 16-d endpoint vectors (`ai/app/graph/builder.py`); reserved dims must stay unused for labels.
+- New pages: add `client/src/pages/`, route in `App.tsx`, link in `Sidebar.tsx`.
+- New APIs: `/api` prefix in `server/routes/`, persist via Drizzle schema in `shared/schema.ts`.

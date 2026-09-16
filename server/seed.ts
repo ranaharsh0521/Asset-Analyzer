@@ -1,3 +1,4 @@
+import "./load-env";
 import { eq } from "drizzle-orm";
 import { db } from "./db";
 import { roles, users, datasets } from "@shared/schema";

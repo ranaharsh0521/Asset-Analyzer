@@ -3,6 +3,7 @@
  * Run on startup to populate network_nodes and network_edges from TGNN graph builder.
  */
 
+import "./load-env";
 import { eq } from "drizzle-orm";
 import { db } from "./db";
 import { networkNodes, networkEdges } from "@shared/schema";

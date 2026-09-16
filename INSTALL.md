@@ -10,7 +10,8 @@
 ## 1. Clone / open project
 
 ```bash
-cd "Asset-Analyzer-main"
+git clone https://github.com/ranaharsh0521/Asset-Analyzer.git
+cd Asset-Analyzer
 ```
 
 ## 2. Environment file
