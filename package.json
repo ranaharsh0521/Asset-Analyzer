@@ -5,6 +5,7 @@
   "license": "MIT",
   "scripts": {
     "dev:client": "vite dev --port 5000",
+    "build:client": "vite build",
     "dev": "cross-env NODE_ENV=development tsx server/index.ts",
     "dev:ai": "cd ai && python -m uvicorn app.main:app --reload --port 8000",
     "build": "tsx script/build.ts",

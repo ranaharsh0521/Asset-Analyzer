@@ -1,0 +1,13 @@
+[build]
+  command = "npm run build:client"
+  publish = "dist/public"
+
+[build.environment]
+  NODE_VERSION = "20"
+
+# SPA Fallback for client-side routing (React / Wouter / React Router)
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+
