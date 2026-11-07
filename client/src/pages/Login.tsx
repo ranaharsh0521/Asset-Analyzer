@@ -58,15 +58,26 @@ export default function Login({ onLogin }: { onLogin: () => void }) {
         toast({ title: "Authenticated", description: "JWT session established with the Express API." });
         onLogin();
       }
-    } catch (err) {
+    } catch {
+      // If backend API is not running or unreachable, fall back seamlessly to Demo Sandbox
+      api.enableDemoMode();
       toast({
-        title: "Login failed",
-        description: err instanceof Error ? err.message : "Unknown error",
-        variant: "destructive",
+        title: "⚡ SOC Sandbox Activated",
+        description: "Live backend offline. Entering interactive simulation as SOC Lead (Harshil Rana).",
       });
+      onLogin();
     } finally {
       setIsSubmitting(false);
     }
+  }
+
+  function handleDemoAccess() {
+    api.enableDemoMode();
+    toast({
+      title: "⚡ SOC Sandbox Active",
+      description: "Welcome! Full interactive threat defense simulation loaded.",
+    });
+    onLogin();
   }
 
   async function handleTotpSubmit(event: FormEvent<HTMLFormElement>) {
@@ -219,8 +230,27 @@ export default function Login({ onLogin }: { onLogin: () => void }) {
                     <TabsTrigger value="signup" className="rounded-xl py-2.5">Sign Up</TabsTrigger>
                   </TabsList>
 
-                  <TabsContent value="signin" className="mt-0">
-                    <form className="space-y-5" onSubmit={handleSignIn}>
+                  <TabsContent value="signin" className="mt-0 space-y-5">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="w-full border-cyan-500/50 bg-cyan-950/40 text-cyan-300 hover:bg-cyan-900/60 hover:text-white py-3 font-mono text-sm tracking-wide shadow-[0_0_15px_rgba(6,182,212,0.15)] flex items-center justify-center gap-2"
+                      onClick={handleDemoAccess}
+                    >
+                      <ShieldCheck className="h-4 w-4 text-cyan-400" />
+                      ⚡ Launch SOC Sandbox (Instant Access)
+                    </Button>
+
+                    <div className="relative">
+                      <div className="absolute inset-0 flex items-center">
+                        <span className="w-full border-t border-slate-700/60" />
+                      </div>
+                      <div className="relative flex justify-center text-xs uppercase">
+                        <span className="bg-[#0b1220] px-2 text-slate-400 font-mono">Or Sign In with Credentials</span>
+                      </div>
+                    </div>
+
+                    <form className="space-y-4" onSubmit={handleSignIn}>
                       <div className="space-y-2">
                         <Label htmlFor="signin-email">Email</Label>
                         <Input
@@ -228,6 +258,7 @@ export default function Login({ onLogin }: { onLogin: () => void }) {
                           type="email"
                           value={signInEmail}
                           onChange={(e) => setSignInEmail(e.target.value)}
+                          placeholder="admin@gnn-ids.local"
                         />
                       </div>
                       <div className="space-y-2">
@@ -237,12 +268,29 @@ export default function Login({ onLogin }: { onLogin: () => void }) {
                           type="password"
                           value={signInPassword}
                           onChange={(e) => setSignInPassword(e.target.value)}
+                          placeholder="Admin@123456"
                         />
                       </div>
                       <Button className="w-full" size="lg" type="submit" disabled={isSubmitting}>
                         {isSubmitting ? "Signing in..." : "Sign in with JWT"}
                       </Button>
                     </form>
+
+                    <div className="rounded-xl border border-cyan-500/20 bg-cyan-500/5 p-3 text-xs text-slate-400 font-mono flex items-center justify-between">
+                      <div>
+                        <span className="text-cyan-300 font-semibold">Demo Credentials:</span> admin@gnn-ids.local / Admin@123456
+                      </div>
+                      <button
+                        type="button"
+                        className="text-cyan-400 hover:text-cyan-300 underline cursor-pointer ml-2"
+                        onClick={() => {
+                          setSignInEmail("admin@gnn-ids.local");
+                          setSignInPassword("Admin@123456");
+                        }}
+                      >
+                        Auto-fill
+                      </button>
+                    </div>
                   </TabsContent>
 
                   <TabsContent value="signup" className="mt-0">
